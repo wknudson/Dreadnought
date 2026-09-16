@@ -4,7 +4,7 @@ import { World, DEFAULT_ARENA_HALF_SIZE } from './world.ts';
 import { resolveContacts } from './physics.ts';
 import { Tank, type Controller, type TankIntent } from './tank.ts';
 import { Shape } from './shape.ts';
-import { Projectile } from './projectiles.ts';
+import { Projectile, raiseNecroDrone } from './projectiles.ts';
 import { getTank, ROOT_TANK_ID } from '../data/tanks.ts';
 import { CARD_LEVELS, CLASS_LEVELS, levelForXp, MAX_LEVEL, xpForLevel } from '../data/leveling.ts';
 import type { ShapeKind } from '../data/shapes.ts';
@@ -23,6 +23,7 @@ class PlayerController implements Controller {
     aimAngle: 0,
     fire: false,
     secondary: false,
+    aimAt: vec(),
   };
 
   tick(): TankIntent {
@@ -104,6 +105,8 @@ export class Run {
     c.aimAngle = aimAngle;
     c.fire = intent.fire;
     c.secondary = intent.secondary;
+    // Drones fly to the cursor itself, not to the direction the hull faces.
+    c.aimAt = intent.aimWorld;
   }
 
   /** Advances the simulation one tick. */
@@ -203,6 +206,7 @@ export class Run {
       if (killer === this.player) {
         this.addXp(victim.xp);
         this.score += victim.xp;
+        this.tryRaise(victim);
       }
       return;
     }
@@ -220,6 +224,31 @@ export class Run {
     if (victim instanceof Projectile) {
       // Projectiles clean up after themselves; nothing further to do here.
     }
+  }
+
+  /**
+   * Raises a killed square as a drone, for a tank that claims them.
+   *
+   * This is the Necromancer's whole weapon: its spawners never fire, so without
+   * this it would have no fleet at all.
+   */
+  private tryRaise(victim: Shape): void {
+    if (!this.player.def.flags.necroCapture) return;
+    if (victim.def.kind !== 'square') return;
+    const barrels = this.player.necroBarrels();
+    if (!barrels.length) return;
+    // Spread the fleet across the spawners so one does not fill up alone.
+    const barrel = barrels.reduce((a, b) => (b.liveCount < a.liveCount ? b : a));
+    raiseNecroDrone(
+      this.world,
+      this.player,
+      this.player,
+      barrel,
+      this.player.points,
+      this.player.scale(),
+      victim.pos,
+      this.player.color,
+    );
   }
 
   /** Keeps the arena stocked with something to shoot. */

@@ -218,8 +218,9 @@ export class World {
       const e = this.entities[read]!;
       if (e.alive) {
         this.entities[write++] = e;
-      } else {
+      } else if (!e.removed) {
         e.removed = true;
+        e.onDespawn(this);
       }
     }
     this.entities.length = write;

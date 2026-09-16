@@ -49,6 +49,13 @@ export interface FireContext {
   secondary: boolean;
   /** Barrels that ignore the trigger entirely, as drone spawners do. */
   alwaysFire?: boolean;
+  /**
+   * Where the barrels are mounted, when that is not the owner's centre.
+   *
+   * A turret on a ring sits off to one side of the hull, and its shots have to
+   * leave from there rather than from the middle of the tank.
+   */
+  originOverride?: Vec2;
 }
 
 /** Called to build the projectile a barrel emits. Set by projectiles.ts. */
@@ -86,9 +93,9 @@ export class BarrelHost {
   }
 
   /** Where a barrel's muzzle sits in world space. */
-  muzzle(owner: BarrelOwner, barrel: BarrelState, facing: number): Vec2 {
+  muzzle(owner: BarrelOwner, barrel: BarrelState, facing: number, origin?: Vec2): Vec2 {
     const scale = owner.scale();
-    const { pos } = owner.entity;
+    const pos = origin ?? owner.entity.pos;
     const a = facing + barrel.def.angle;
     const length = barrel.def.size * scale;
     const offset = barrel.def.offset * scale;
@@ -140,11 +147,17 @@ export class BarrelHost {
       if (barrel.cycle < threshold) continue;
       barrel.cycle = period * barrel.def.delay;
 
-      this.fireOne(ctx.world, owner, barrel, facing);
+      this.fireOne(ctx.world, owner, barrel, facing, ctx.originOverride);
     }
   }
 
-  private fireOne(world: World, owner: BarrelOwner, barrel: BarrelState, facing: number): void {
+  private fireOne(
+    world: World,
+    owner: BarrelOwner,
+    barrel: BarrelState,
+    facing: number,
+    origin?: Vec2,
+  ): void {
     if (!factory) throw new Error('projectile factory not registered');
 
     const stats = owner.stats();
@@ -153,7 +166,7 @@ export class BarrelHost {
     const scatter = shotStats.scatter * (world.rng.next() - 0.5) * 2;
     const angle = facing + barrel.def.angle + scatter;
 
-    const spawn = this.muzzle(owner, barrel, facing);
+    const spawn = this.muzzle(owner, barrel, facing, origin);
     const projectile = factory(world, owner, barrel, spawn, angle);
     if (!projectile) return;
 

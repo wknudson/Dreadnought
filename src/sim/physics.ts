@@ -46,16 +46,13 @@ export function hostile(a: Entity, b: Entity): boolean {
   return a.team !== b.team;
 }
 
-/** Projectiles take only a quarter of the damage dealt to them. */
-const PROJECTILE_DAMAGE_SCALE = 0.25;
 /** Tanks hurt each other half again as hard as they hurt anything else. */
 const TANK_VS_TANK_SCALE = 1.5;
 
 function contactDamage(attacker: Entity, victim: Entity): number {
   const base = damageOf(attacker);
   if (base <= 0) return 0;
-  let scale = 1;
-  if (victim.kind === 'projectile') scale *= PROJECTILE_DAMAGE_SCALE;
+  let scale = victim.incomingDamageScale;
   if (attacker.kind === 'tank' && victim.kind === 'tank') scale *= TANK_VS_TANK_SCALE;
   return base * scale;
 }

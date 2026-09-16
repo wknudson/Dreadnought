@@ -12,7 +12,9 @@ import {
 import { SQUARE_BODY_RADIUS, BASE_BODY_RADIUS } from '../data/leveling.ts';
 import type { TankDefinition } from '../data/schema.ts';
 import { COLORS } from '../data/colors.ts';
-import { vec } from '../core/math.ts';
+import { vec, type Vec2 } from '../core/math.ts';
+import { AutoTurret } from './turret.ts';
+import type { DroneCommander, DroneOrders } from './projectiles.ts';
 
 /** What a controller asks its tank to do this tick. */
 export interface TankIntent {
@@ -23,6 +25,8 @@ export interface TankIntent {
   aimAngle: number;
   fire: boolean;
   secondary: boolean;
+  /** Where the owner is pointing, in world space. Drones fly to it. */
+  aimAt?: Vec2;
 }
 
 export const idleIntent = (): TankIntent => ({
@@ -43,7 +47,7 @@ export interface Controller {
  * All three differ only in their controller and their definition, so upgrading
  * the player's class and spawning an elite enemy run through the same code.
  */
-export class Tank extends Entity implements BarrelOwner {
+export class Tank extends Entity implements BarrelOwner, DroneCommander {
   override readonly kind: EntityKind = 'tank';
 
   def: TankDefinition;
@@ -64,6 +68,14 @@ export class Tank extends Entity implements BarrelOwner {
   guardSpin = 0;
   prevGuardSpin = 0;
 
+  /** Turrets bolted on by the tank's addons, each aiming independently. */
+  turrets: AutoTurret[] = [];
+  /** Shared rotation of an Auto 3 or Auto 5 mounting ring. */
+  ringAngle = 0;
+  prevRingAngle = 0;
+  /** Radians per tick the mounting ring turns. */
+  private ringSpin = 0;
+
   contactDamage = 0;
 
   constructor(def: TankDefinition, level: number, controller: Controller, color: string) {
@@ -79,6 +91,24 @@ export class Tank extends Entity implements BarrelOwner {
     this.health = this.maxHealth;
     this.radius = this.computeRadius();
     this.contactDamage = this.derived.bodyDamage;
+    this.buildTurrets();
+  }
+
+  /** Rebuilds the turret list from the current definition's addons. */
+  private buildTurrets(): void {
+    this.turrets = [];
+    this.ringSpin = 0;
+    const addons = [...this.def.preAddons, ...this.def.postAddons];
+    for (const addon of addons) {
+      if (addon.kind === 'autoTurret') {
+        this.turrets.push(new AutoTurret(addon.turret, this));
+      } else if (addon.kind === 'autoRing') {
+        this.ringSpin = addon.ringSpin;
+        for (let i = 0; i < addon.count; i++) {
+          this.turrets.push(new AutoTurret(addon.turret, this, i, addon.count));
+        }
+      }
+    }
   }
 
   private get isSpike(): boolean {
@@ -132,6 +162,7 @@ export class Tank extends Entity implements BarrelOwner {
     this.host.replace(def.barrels);
     this.absorbtionFactor = def.absorbtionFactor;
     const refunded = reconcileStats(def, this.points);
+    this.buildTurrets();
     this.refresh();
     // Refill to the new maximum so an upgrade always feels like a reward.
     this.health = this.maxHealth;
@@ -168,6 +199,11 @@ export class Tank extends Entity implements BarrelOwner {
       secondary: intent.secondary,
     });
 
+    // Turrets aim and fire on their own, whatever the hull is doing.
+    this.prevRingAngle = this.ringAngle;
+    this.ringAngle += this.ringSpin;
+    for (const turret of this.turrets) turret.tick(world, this.ringAngle);
+
     // Spinning guards on the Smasher line.
     this.prevGuardSpin = this.guardSpin;
     this.guardSpin += 0.1;
@@ -188,12 +224,38 @@ export class Tank extends Entity implements BarrelOwner {
       this.opacity = 1;
       return;
     }
-    const moving = Math.hypot(this.vel.x, this.vel.y) > 0.5;
+    // Judged on the throttle rather than on velocity: a Manager is shoved about
+    // by its own spawner recoil, and drifting from that should not give it away.
+    const moving = Math.hypot(intent.moveX, intent.moveY) > 0.01;
     let delta = -profile.fadeRate;
     if (moving) delta += profile.moveRate;
     if (intent.fire) delta += profile.shootRate;
     if (this.flashTicks > 0) delta += profile.damageAmount;
     this.opacity = Math.max(0, Math.min(1, this.opacity + delta));
+  }
+
+  /**
+   * What this tank is telling its drones to do.
+   *
+   * Holding fire sends them at the cursor and holding the secondary pushes them
+   * away; with neither held they fall back to their own judgement.
+   */
+  droneOrders(): DroneOrders {
+    const intent = this.lastIntent;
+    const aim = intent.aimAt ?? {
+      x: this.pos.x + Math.cos(this.angle) * 600,
+      y: this.pos.y + Math.sin(this.angle) * 600,
+    };
+    return {
+      target: aim,
+      steering: intent.fire,
+      repelling: intent.secondary,
+    };
+  }
+
+  /** The spawner barrels a Necromancer raises its squares through. */
+  necroBarrels(): typeof this.host.barrels {
+    return this.host.barrels.filter((b) => b.def.projectile.kind === 'necroDrone');
   }
 
   /** Leaves a death effect shaped like this tank. */

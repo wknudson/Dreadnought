@@ -50,6 +50,15 @@ export abstract class Entity {
   /** How hard this entity shoves others on contact. */
   pushFactor = 8;
 
+  /**
+   * Multiplier on damage this entity receives.
+   *
+   * Projectiles set it to a quarter, which is what lets a bullet punch through
+   * several shapes. Necromancer squares set it back to one, because they count
+   * as shapes and die as readily as the ones they were raised from.
+   */
+  incomingDamageScale = 1;
+
   /** Opacity, driven by the invisibility tanks. */
   opacity = 1;
 
@@ -61,6 +70,15 @@ export abstract class Entity {
 
   /** Advances this entity by one tick. */
   abstract update(world: World): void;
+
+  /**
+   * Called once, as the entity is removed from the world.
+   *
+   * Every death runs through here, whether the entity ran out of time or was
+   * shot, so cleanup that must not be missed belongs in this hook rather than
+   * wherever the death happened to be noticed.
+   */
+  onDespawn(_world: World): void {}
 
   /** Records the pre-tick transform so the renderer can interpolate. */
   snapshot(): void {

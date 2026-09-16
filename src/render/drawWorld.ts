@@ -6,8 +6,7 @@ import { Tank } from '../sim/tank.ts';
 import { Shape } from '../sim/shape.ts';
 import { Projectile } from '../sim/projectiles.ts';
 import { drawTank, polygonPath } from './drawTank.ts';
-import { COLORS, outline } from '../data/colors.ts';
-import { BarrelHost } from '../sim/weapon.ts';
+import { COLORS, mix, outline } from '../data/colors.ts';
 import { lerp, vec, type Vec2 } from '../core/math.ts';
 
 /** Grid spacing in diep units: one square is one body radius at level 1. */
@@ -136,6 +135,10 @@ function drawTankEntity(ctx: CanvasRenderingContext2D, tank: Tank, alpha: number
     flash: tank.flashTicks / FLASH_TICKS,
     barrelRecoil: tank.host.barrels.map((b) => b.recoilAnim),
     guardSpin: lerp(tank.prevGuardSpin, tank.guardSpin, alpha),
+    // Turrets aim independently of the hull, so their angles are absolute and
+    // have to be interpolated separately from it.
+    turretAngles: tank.turrets.map((t) => lerpAngle(t.prevAngle, t.angle, alpha) - angle),
+    ringSpin: lerp(tank.prevRingAngle, tank.ringAngle, alpha),
   });
   ctx.restore();
 }
@@ -158,24 +161,64 @@ function drawShape(ctx: CanvasRenderingContext2D, shape: Shape, alpha: number): 
   ctx.restore();
 }
 
+/** Traps are drawn as the three-pointed star the game uses. */
+function starPath(ctx: CanvasRenderingContext2D, radius: number, points: number): void {
+  const inner = radius * 0.5;
+  for (let i = 0; i < points * 2; i++) {
+    const r = i % 2 === 0 ? radius : inner;
+    const a = (Math.PI * i) / points - Math.PI / 2;
+    const x = Math.cos(a) * r;
+    const y = Math.sin(a) * r;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+}
+
 function drawProjectile(ctx: CanvasRenderingContext2D, p: Projectile, alpha: number): void {
   const pos = lerpPos(p, alpha);
+  const angle = lerpAngle(p.prevAngle, p.angle, alpha);
   const fill = p.deathColor;
+
+  // A missile or minion carries its own barrels, so it is drawn as a small tank.
+  const carrier = p.carriedDef;
+  if (carrier) {
+    ctx.save();
+    ctx.translate(pos.x, pos.y);
+    drawTank(ctx, carrier, {
+      color: fill,
+      angle,
+      radius: p.radius,
+      flash: p.flashTicks / FLASH_TICKS,
+    });
+    ctx.restore();
+    return;
+  }
+
   ctx.save();
   ctx.translate(pos.x, pos.y);
-  ctx.fillStyle = fill;
+  ctx.fillStyle = p.flashTicks > 0 ? mix(fill, '#FFFFFF', 0.45) : fill;
   ctx.strokeStyle = outline(fill);
   ctx.lineWidth = Math.max(1, p.radius * 0.2);
   ctx.lineJoin = 'round';
   ctx.beginPath();
-  if (p.projectileKind === 'drone' || p.projectileKind === 'swarm') {
-    ctx.rotate(lerpAngle(p.prevAngle, p.angle, alpha));
-    polygonPath(ctx, 0, 0, p.radius * 1.4, 3);
-  } else if (p.projectileKind === 'necroDrone') {
-    ctx.rotate(lerpAngle(p.prevAngle, p.angle, alpha));
-    polygonPath(ctx, 0, 0, p.radius * 1.3, 4);
-  } else {
-    ctx.arc(0, 0, p.radius, 0, Math.PI * 2);
+  switch (p.projectileKind) {
+    case 'drone':
+    case 'swarm':
+      ctx.rotate(angle);
+      polygonPath(ctx, 0, 0, p.radius * 1.5, 3);
+      break;
+    case 'necroDrone':
+      ctx.rotate(angle);
+      polygonPath(ctx, 0, 0, p.radius * 1.35, 4, Math.PI / 4);
+      break;
+    case 'trap':
+      ctx.rotate(angle);
+      starPath(ctx, p.radius * 1.5, 3);
+      break;
+    default:
+      ctx.arc(0, 0, p.radius, 0, Math.PI * 2);
+      break;
   }
   ctx.fill();
   ctx.stroke();
@@ -253,4 +296,3 @@ function drawName(ctx: CanvasRenderingContext2D, tank: Tank, alpha: number): voi
   ctx.restore();
 }
 
-export { BarrelHost };
