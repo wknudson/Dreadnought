@@ -1,0 +1,207 @@
+{
+  "$comment": [
+    "Corrections deep-merged onto the converted vendor tanks. Arrays merge by index,",
+    "so an entry of null leaves that barrel untouched. Two reasons appear here:",
+    "(1) the wiki and the vendor table disagree and the wiki is self-consistent;",
+    "(2) the vendor table omits geometry that lives in its source code rather than",
+    "its data file, namely the barrels carried by missiles and Factory minions."
+  ],
+
+  "$penta-shot": "Wiki: 3.5 base damage, a self-consistent -28.6% from Triple Shot's 0.7.",
+  "penta-shot": {
+    "barrels": [
+      { "projectile": { "damage": 0.5 } },
+      { "projectile": { "damage": 0.5 } },
+      { "projectile": { "damage": 0.5 } },
+      { "projectile": { "damage": 0.5 } },
+      { "projectile": { "damage": 0.5 } }
+    ]
+  },
+
+  "$spread-shot": "Wiki: side bullets 3.85 base damage, -21.4% from 0.7. Barrel 10 is the full-power centre.",
+  "spread-shot": {
+    "barrels": [
+      { "projectile": { "damage": 0.55 } },
+      { "projectile": { "damage": 0.55 } },
+      { "projectile": { "damage": 0.55 } },
+      { "projectile": { "damage": 0.55 } },
+      { "projectile": { "damage": 0.55 } },
+      { "projectile": { "damage": 0.55 } },
+      { "projectile": { "damage": 0.55 } },
+      { "projectile": { "damage": 0.55 } },
+      { "projectile": { "damage": 0.55 } },
+      { "projectile": { "damage": 0.55 } }
+    ]
+  },
+
+  "$annihilator": "Wiki lists penetration 4.8 against Destroyer's 4.0, and marks it as an upgrade.",
+  "annihilator": { "barrels": [{ "projectile": { "health": 2.4 } }] },
+  "hybrid": { "barrels": [{ "projectile": { "health": 2.4 } }] },
+
+  "$gunner": "Wiki: penetration 1.0. Auto Gunner's page describes itself as nerfing that to 0.9, which only makes sense if Gunner is 0.5 here.",
+  "gunner": {
+    "barrels": [
+      { "projectile": { "health": 0.5 } },
+      { "projectile": { "health": 0.5 } },
+      { "projectile": { "health": 0.5 } },
+      { "projectile": { "health": 0.5 } }
+    ]
+  },
+
+  "$twin-flank": "Wiki: damage 4.2 and penetration 1.8 for both Twin Flank and Triple Twin.",
+  "twin-flank": {
+    "barrels": [
+      { "projectile": { "damage": 0.6, "health": 0.9 } },
+      { "projectile": { "damage": 0.6, "health": 0.9 } },
+      { "projectile": { "damage": 0.6, "health": 0.9 } },
+      { "projectile": { "damage": 0.6, "health": 0.9 } }
+    ]
+  },
+  "triple-twin": {
+    "barrels": [
+      { "projectile": { "damage": 0.6, "health": 0.9 } },
+      { "projectile": { "damage": 0.6, "health": 0.9 } },
+      { "projectile": { "damage": 0.6, "health": 0.9 } },
+      { "projectile": { "damage": 0.6, "health": 0.9 } },
+      { "projectile": { "damage": 0.6, "health": 0.9 } },
+      { "projectile": { "damage": 0.6, "health": 0.9 } }
+    ]
+  },
+
+  "$overtrapper": "Wiki: four drones, two steerable and two not. The vendor table has two, both AI.",
+  "overtrapper": {
+    "barrels": [
+      null,
+      { "projectile": { "maxCount": 2, "controllable": true } },
+      { "projectile": { "maxCount": 2, "controllable": false } }
+    ]
+  },
+
+  "$battleship": "The swarm is capped by its short life, not by a count. Roughly 4.2 s per the wiki.",
+  "battleship": {
+    "barrels": [
+      { "projectile": { "lifeLength": 1.2 } },
+      { "projectile": { "lifeLength": 1.2 } },
+      { "projectile": { "lifeLength": 1.2 } },
+      { "projectile": { "lifeLength": 1.2 } }
+    ]
+  },
+
+  "$skimmer": "The missile carries two opposed barrels and spins at 0.1 rad/tick, reversing on right click.",
+  "skimmer": {
+    "barrels": [
+      {
+        "projectile": {
+          "spinRate": 0.1,
+          "barrels": [
+            {
+              "angle": 0,
+              "offset": 0,
+              "size": 70,
+              "width": 42,
+              "delay": 0,
+              "reload": 0.35,
+              "recoil": 0,
+              "shape": "rect",
+              "projectile": {
+                "kind": "bullet",
+                "sizeRatio": 1,
+                "health": 0.3,
+                "damage": 0.6,
+                "speed": 1.1,
+                "scatterRate": 1,
+                "lifeLength": 0.25,
+                "absorbtionFactor": 1
+              }
+            },
+            {
+              "angle": 3.141592653589793,
+              "offset": 0,
+              "size": 70,
+              "width": 42,
+              "delay": 0,
+              "reload": 0.35,
+              "recoil": 0,
+              "shape": "rect",
+              "projectile": {
+                "kind": "bullet",
+                "sizeRatio": 1,
+                "health": 0.3,
+                "damage": 0.6,
+                "speed": 1.1,
+                "scatterRate": 1,
+                "lifeLength": 0.25,
+                "absorbtionFactor": 1
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+
+  "$rocketeer": "A single rear thruster whose heavy recoil is what actually drives the missile, after a short startup.",
+  "rocketeer": {
+    "barrels": [
+      {
+        "projectile": {
+          "startupDelay": 15,
+          "barrels": [
+            {
+              "angle": 3.141592653589793,
+              "offset": 0,
+              "size": 70,
+              "width": 36,
+              "delay": 0,
+              "reload": 0.15,
+              "recoil": 3.3,
+              "shape": "trapezoidMuzzle",
+              "projectile": {
+                "kind": "bullet",
+                "sizeRatio": 1,
+                "health": 0.3,
+                "damage": 0.6,
+                "speed": 1.5,
+                "scatterRate": 5,
+                "lifeLength": 0.1,
+                "absorbtionFactor": 1
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+
+  "$factory": "Minions are small circular tanks with a barrel of their own, drawn at the minion's scale.",
+  "factory": {
+    "barrels": [
+      {
+        "projectile": {
+          "barrels": [
+            {
+              "angle": 0,
+              "offset": 0,
+              "size": 85,
+              "width": 50.4,
+              "delay": 0,
+              "reload": 1,
+              "recoil": 1,
+              "shape": "rect",
+              "projectile": {
+                "kind": "bullet",
+                "sizeRatio": 1,
+                "health": 0.4,
+                "damage": 0.4,
+                "speed": 0.8,
+                "scatterRate": 1,
+                "lifeLength": 1,
+                "absorbtionFactor": 1
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

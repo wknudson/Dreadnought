@@ -1,0 +1,82 @@
+{
+  "id": "glider",
+  "name": "Glider",
+  "tier": 4,
+  "unlockLevel": 45,
+  "upgradesTo": [],
+  "upgradesFrom": ["destroyer"],
+  "barrels": [
+    {
+      "angle": 0,
+      "offset": 0,
+      "size": 80,
+      "width": 56.7,
+      "delay": 0,
+      "reload": 4,
+      "recoil": 0.3,
+      "shape": "trapezoidBase",
+      "projectile": {
+        "kind": "glider",
+        "sizeRatio": 1,
+        "health": 3,
+        "damage": 1,
+        "speed": 0.3,
+        "scatterRate": 0,
+        "lifeLength": 1.3,
+        "absorbtionFactor": 0.1,
+        "startupDelay": 10,
+        "barrels": [
+          {
+            "angle": 2.8623399732707,
+            "offset": 0,
+            "size": 70,
+            "width": 36,
+            "delay": 0,
+            "reload": 0.35,
+            "recoil": 1.6,
+            "shape": "trapezoidMuzzle",
+            "projectile": {
+              "kind": "bullet",
+              "sizeRatio": 1,
+              "health": 0.6,
+              "damage": 0.6,
+              "speed": 0.5,
+              "scatterRate": 1,
+              "lifeLength": 0.25,
+              "absorbtionFactor": 1
+            }
+          },
+          {
+            "angle": 3.4208453339091,
+            "offset": 0,
+            "size": 70,
+            "width": 36,
+            "delay": 0,
+            "reload": 0.35,
+            "recoil": 1.6,
+            "shape": "trapezoidMuzzle",
+            "projectile": {
+              "kind": "bullet",
+              "sizeRatio": 1,
+              "health": 0.6,
+              "damage": 0.6,
+              "speed": 0.5,
+              "scatterRate": 1,
+              "lifeLength": 0.25,
+              "absorbtionFactor": 1
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "preAddons": [
+    { "kind": "launcher", "angle": 3.141592653589793, "length": 92.63095419887, "width": 33.6 }
+  ],
+  "postAddons": [],
+  "fieldFactor": 0.9,
+  "flags": {},
+  "sides": 1,
+  "absorbtionFactor": 1,
+  "speedMultiplier": 1
+}
