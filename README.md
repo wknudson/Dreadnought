@@ -14,8 +14,16 @@ npm install
 npm run dev
 ```
 
+To check everything at once, which regenerates the tank table, runs the tests
+and builds:
+
+```
+npm run check
+```
+
 Other scripts: `npm run build` (typecheck then bundle), `npm run preview`,
-`npm run typecheck`, and `npm run data` to regenerate the tank table.
+`npm run typecheck`, `npm test`, and `npm run data` to regenerate the tank table
+on its own.
 
 ## Tank data
 
