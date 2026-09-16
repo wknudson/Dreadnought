@@ -7,6 +7,10 @@ three cards, and class upgrades unlock at levels 15, 30 and 45. Death ends the r
 
 Single-player, no server, no accounts. TypeScript and Canvas 2D, built with Vite.
 
+**Play it: https://willknudson-capbpm.github.io/Dreadnought/**
+
+Works with a mouse and keyboard or with two thumbs on a phone.
+
 ## Running it
 
 ```
@@ -34,7 +38,19 @@ than a target. It is the fastest way to tell whether a change made the game
 longer, shorter, or impossible, and it found every stalling bug in the wave
 system before a human ever saw one.
 
-While playing, Shift+L grants a level and Shift+K skips to the next wave.
+While playing, Shift+L grants a level, Shift+K skips to the next wave, and F2
+shows a debug readout.
+
+## Playing
+
+Drive with WASD or the arrow keys, aim with the mouse, fire with click or space.
+Right click or shift is the secondary action, which steers drones on the tanks
+that have them. E holds the trigger down, C spins you, Escape pauses. On a phone
+the left thumb drives and the right thumb aims and fires.
+
+A run is twenty-five waves with a boss every fifth. Levelling deals a choice of
+three cards, and at levels 15, 30 and 45 you pick a class from the real upgrade
+tree. Dying ends the run; only the best wave and score survive it.
 
 ## Tank data
 
