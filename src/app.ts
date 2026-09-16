@@ -17,6 +17,7 @@ import { PLAYER_COLORS } from './data/colors.ts';
 import { vec } from './core/math.ts';
 import { clearUi, mount } from './ui/dom.ts';
 import { buildDeath, buildPause, buildTitle } from './ui/title.ts';
+import { buildClassUpgrade } from './ui/overlays.ts';
 import { TreeViewer } from './ui/tree.ts';
 
 export type Screen = 'title' | 'tree' | 'run' | 'dead';
@@ -84,7 +85,75 @@ export class App {
     });
     window.addEventListener('keydown', (e) => {
       if (e.code === 'F2') this.showDebug = !this.showDebug;
+      // Hold shift and press L to jump a level, for reaching the upper tiers
+      // without farming. Shift keeps it clear of the movement keys.
+      if (e.code === 'KeyL' && e.shiftKey && this.screen === 'run') {
+        this.run?.debugGrantLevel();
+      }
     });
+
+    this.onChoice('class', (run) => this.showClassUpgrade(run));
+  }
+
+  /** Presents the class choices earned at levels 15, 30 and 45. */
+  private showClassUpgrade(run: Run): void {
+    const options = run.classOptions();
+    if (!options.length) {
+      run.consumeChoice('class');
+      return;
+    }
+    this.input.releaseAll();
+    mount(
+      buildClassUpgrade({
+        current: run.player.def,
+        options,
+        color: this.playerColor,
+        level: run.level,
+        nextChanceAt: run.nextClassLevel(),
+        onPick: (id) => {
+          run.upgradeTo(id);
+          this.afterChoice();
+        },
+        onSkip: () => {
+          run.consumeChoice('class');
+          this.afterChoice();
+        },
+      }),
+    );
+  }
+
+  /**
+   * Clears a resolved choice and shows the next one, if the level-up earned
+   * more than one. Only when the queue is empty does play resume.
+   */
+  private afterChoice(): void {
+    const run = this.run;
+    if (!run) return;
+    this.overlay = null;
+    clearUi();
+    if (run.waitingOnChoice) {
+      this.presentNextChoice(run);
+      return;
+    }
+    this.loop.resetClock();
+  }
+
+  /** Opens the interface for the next pending choice, or takes it if there is none. */
+  private presentNextChoice(run: Run): void {
+    while (run.waitingOnChoice && !this.overlay) {
+      const next = run.pendingChoices[0]!;
+      const handler = this.choiceHandlers.get(next);
+      if (!handler) {
+        // No interface for this choice yet: take it and carry on.
+        run.consumeChoice(next);
+        continue;
+      }
+      this.overlay = next === 'class' ? 'classUpgrade' : 'cards';
+      handler(run);
+      // A handler that resolved immediately leaves nothing mounted.
+      if (!run.pendingChoices.includes(next)) this.overlay = null;
+    }
+    this.loop.resetClock();
   }
 
   start(): void {
@@ -252,17 +321,7 @@ export class App {
     run.tick();
 
     // A level-up that earned a choice holds the game until it is answered.
-    while (run.waitingOnChoice && !this.overlay) {
-      const next = run.pendingChoices[0]!;
-      const handler = this.choiceHandlers.get(next);
-      if (handler) {
-        handler(run);
-        this.setOverlay(next === 'class' ? 'classUpgrade' : 'cards');
-      } else {
-        // No interface for this choice yet: take it and carry on.
-        run.consumeChoice(next);
-      }
-    }
+    if (run.waitingOnChoice && !this.overlay) this.presentNextChoice(run);
 
     if (run.over) this.endRun();
 

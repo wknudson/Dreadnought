@@ -5,6 +5,7 @@ import { tankIcon } from '../render/iconCache.ts';
 import { artExtent, drawTank } from '../render/drawTank.ts';
 import { clamp, vec, type Vec2 } from '../core/math.ts';
 import { el, button } from './dom.ts';
+import { describeTank } from './describe.ts';
 
 /** Ring radius for each tier, in tree-space units. */
 const RING_RADIUS = [0, 320, 620, 960];
@@ -294,6 +295,7 @@ export class TreeViewer {
 
     this.detail.replaceChildren(
       el('h3', {}, def.name),
+      el('p', { class: 'tree-blurb' }, describeTank(def)),
       el('div', { class: 'tree-rows' }, ...rows),
       parents.length
         ? el('div', { class: 'tree-links' }, el('span', { class: 'k' }, 'Upgrades from'), el('span', {}, parents.join(', ')))

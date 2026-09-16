@@ -364,3 +364,29 @@ test('the same seed produces the same run', () => {
   assert.equal(positions(99), positions(99), 'one seed, one outcome');
   assert.notEqual(positions(99), positions(100), 'different seeds should diverge');
 });
+
+test('turning down a class keeps the offer open until the next tier', () => {
+  const run = makeRun();
+  run.addXp(XP_TABLE[15]!);
+  assert.equal(run.nextClassLevel(), 30, 'the next chance is level thirty');
+
+  // Refusing at fifteen is how Smasher is reached, so it must cost nothing now.
+  run.consumeChoice('class');
+  assert.equal(run.player.def.id, 'tank');
+
+  run.addXp(XP_TABLE[30]! - run.xp);
+  const options = run.classOptions();
+  assert.ok(options.includes('smasher'), 'staying Basic is what unlocks Smasher');
+  assert.ok(options.includes('twin'), 'and the ordinary choices are still there');
+  assert.equal(run.nextClassLevel(), 45);
+});
+
+test('the level key advances exactly one level', () => {
+  const run = makeRun();
+  run.debugGrantLevel();
+  assert.equal(run.level, 2);
+  run.debugGrantLevel();
+  assert.equal(run.level, 3);
+  for (let i = 0; i < 60; i++) run.debugGrantLevel();
+  assert.equal(run.level, MAX_LEVEL, 'and stops at the cap');
+});

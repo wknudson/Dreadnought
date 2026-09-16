@@ -6,7 +6,7 @@ import { Tank, type Controller, type TankIntent } from './tank.ts';
 import { Shape } from './shape.ts';
 import { Projectile } from './projectiles.ts';
 import { getTank, ROOT_TANK_ID } from '../data/tanks.ts';
-import { CARD_LEVELS, CLASS_LEVELS, levelForXp, MAX_LEVEL } from '../data/leveling.ts';
+import { CARD_LEVELS, CLASS_LEVELS, levelForXp, MAX_LEVEL, xpForLevel } from '../data/leveling.ts';
 import type { ShapeKind } from '../data/shapes.ts';
 import { SHINY_CHANCE } from '../data/shapes.ts';
 import type { DifficultyId } from '../core/storage.ts';
@@ -168,7 +168,33 @@ export class Run {
 
   /** The class options available right now, empty when there is no choice to make. */
   classOptions(): string[] {
-    return this.player.def.upgradesTo.filter((id) => this.level >= getTank(id).unlockLevel);
+    return this.player.def.upgradesTo
+      .filter((id) => this.level >= getTank(id).unlockLevel)
+      .sort((a, b) => {
+        const x = getTank(a);
+        const y = getTank(b);
+        return x.tier - y.tier || x.name.localeCompare(y.name);
+      });
+  }
+
+  /**
+   * The next level at which a class choice comes round, or null if none remain.
+   *
+   * Turning an upgrade down is a legitimate play: staying Basic through level 15
+   * is the only way to reach Smasher, so the panel needs to say when the next
+   * chance arrives rather than implying the offer is final.
+   */
+  nextClassLevel(): number | null {
+    for (const level of CLASS_LEVELS) {
+      if (level > this.level && !this.classLevelsSeen.has(level)) return level;
+    }
+    return null;
+  }
+
+  /** Grants a level outright. Used by the in-development level key. */
+  debugGrantLevel(): void {
+    if (this.level >= MAX_LEVEL) return;
+    this.addXp(Math.max(1, xpForLevel(this.level + 1) - this.xp));
   }
 
   private onKill(victim: unknown, killer: unknown): void {

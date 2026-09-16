@@ -267,6 +267,74 @@ body {
   font-size: 15px;
 }
 
+/* --- Choice panels (class upgrades, and later the cards) ----------------- */
+
+.panel-wide {
+  max-width: min(880px, 94vw);
+}
+
+.panel-sub {
+  margin: -10px 0 20px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.choice {
+  appearance: none;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  width: 168px;
+  padding: 14px 12px 12px;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ink);
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.1s ease, border-color 0.12s ease, background 0.12s ease;
+}
+
+.choice:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent);
+  background: rgba(0, 178, 225, 0.16);
+}
+
+.choice-icon {
+  display: block;
+  width: 92px;
+  height: 92px;
+}
+
+.choice-name {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.choice-blurb {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--muted);
+  text-align: center;
+  min-height: 32px;
+}
+
+.choice-tier {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+}
+
 /* --- Tank tree ----------------------------------------------------------- */
 
 .tree-screen {
