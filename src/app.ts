@@ -1,13 +1,23 @@
 import { FixedLoop, SECONDS_PER_TICK } from './core/loop.ts';
 import { InputManager, emptyIntent, type Intent } from './core/input.ts';
 import { seedFromLocation } from './core/rng.ts';
-import { loadSettings, saveSettings, type Settings } from './core/storage.ts';
+import {
+  loadSettings,
+  recordRun,
+  saveSettings,
+  type DifficultyId,
+  type Settings,
+} from './core/storage.ts';
 import { Camera } from './render/camera.ts';
 import { drawWorld } from './render/drawWorld.ts';
 import { drawHud, drawTouchSticks, drawDebug, type HudState } from './render/hud.ts';
+import { clearIconCache } from './render/iconCache.ts';
 import { Run, type PendingChoice } from './sim/run.ts';
 import { PLAYER_COLORS } from './data/colors.ts';
 import { vec } from './core/math.ts';
+import { clearUi, mount } from './ui/dom.ts';
+import { buildDeath, buildPause, buildTitle } from './ui/title.ts';
+import { TreeViewer } from './ui/tree.ts';
 
 export type Screen = 'title' | 'tree' | 'run' | 'dead';
 export type Overlay = null | 'pause' | 'cards' | 'classUpgrade';
@@ -17,7 +27,7 @@ export type Overlay = null | 'pause' | 'cards' | 'classUpgrade';
  *
  * The simulation only advances while a run is on screen with no overlay over it,
  * which is what makes the card and upgrade panels pause the game rather than
- * needing the sim to know about them.
+ * needing the simulation to know anything about them.
  */
 export class App {
   readonly canvas: HTMLCanvasElement;
@@ -39,9 +49,12 @@ export class App {
   private hud: HudState = { wave: 0, countdown: 0 };
   private lastFrame = performance.now();
   private showDebug = false;
+  private tree: TreeViewer | null = null;
+  /** Where to return when the tree is closed. */
+  private treeReturn: Screen = 'title';
 
   /**
-   * Screens that present a pending choice to the player.
+   * Interfaces that resolve a pending choice.
    *
    * A choice with no handler registered is taken automatically rather than
    * halting the game, which lets progression run before its interface exists.
@@ -67,7 +80,7 @@ export class App {
     this.resize();
     window.addEventListener('resize', () => this.resize());
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden && this.screen === 'run' && !this.overlay) this.setOverlay('pause');
+      if (document.hidden && this.screen === 'run' && !this.overlay) this.showPause();
     });
     window.addEventListener('keydown', (e) => {
       if (e.code === 'F2') this.showDebug = !this.showDebug;
@@ -75,7 +88,13 @@ export class App {
   }
 
   start(): void {
+    this.showTitle();
     this.loop.start();
+  }
+
+  /** The colour the player picked, as a hex string. */
+  get playerColor(): string {
+    return (PLAYER_COLORS.find((c) => c.id === this.settings.colorId) ?? PLAYER_COLORS[0]!).hex;
   }
 
   private resize(): void {
@@ -90,24 +109,108 @@ export class App {
     this.camera.resize(this.width, this.height);
   }
 
-  /** Starts a fresh run and shows it. */
+  // --- Screens -------------------------------------------------------------
+
+  showTitle(): void {
+    this.closeTree();
+    this.screen = 'title';
+    this.overlay = null;
+    this.run = null;
+    mount(
+      buildTitle({
+        colorId: this.settings.colorId,
+        difficulty: this.settings.difficulty,
+        onColorChange: (colorId) => {
+          this.settings = saveSettings({ colorId });
+          // Cached icons carry their colour, so they have to go.
+          clearIconCache();
+        },
+        onDifficultyChange: (difficulty: DifficultyId) => {
+          this.settings = saveSettings({ difficulty });
+        },
+        onPlay: () => this.startRun(),
+        onViewTree: () => this.showTree('title'),
+      }),
+    );
+    this.loop.resetClock();
+  }
+
+  showTree(from: Screen = 'title'): void {
+    this.closeTree();
+    this.treeReturn = from;
+    this.screen = 'tree';
+    this.tree = new TreeViewer(this.canvas, this.playerColor, () => {
+      if (this.treeReturn === 'run' && this.run) this.resumeRun();
+      else this.showTitle();
+    });
+    if (from === 'run' && this.run) this.tree.focus(this.run.player.def.id);
+    mount(this.tree.panel);
+    this.loop.resetClock();
+  }
+
+  private closeTree(): void {
+    this.tree?.destroy();
+    this.tree = null;
+  }
+
   startRun(): void {
-    const color = PLAYER_COLORS.find((c) => c.id === this.settings.colorId) ?? PLAYER_COLORS[0]!;
+    this.closeTree();
     this.run = new Run({
       seed: seedFromLocation(),
       difficulty: this.settings.difficulty,
-      color: color.hex,
+      color: this.playerColor,
     });
     this.camera.follow(this.run.player.pos, this.run.player.fieldOfView());
     this.camera.snap();
     this.screen = 'run';
     this.overlay = null;
+    clearUi();
+    this.input.releaseAll();
     this.loop.resetClock();
   }
 
-  setScreen(screen: Screen): void {
-    this.screen = screen;
+  private resumeRun(): void {
+    this.closeTree();
+    this.screen = 'run';
     this.overlay = null;
+    clearUi();
+    this.loop.resetClock();
+  }
+
+  private showPause(): void {
+    if (!this.run) return;
+    this.overlay = 'pause';
+    this.input.releaseAll();
+    mount(
+      buildPause(
+        () => this.resumeRun(),
+        () => this.endRun(),
+      ),
+    );
+    this.loop.resetClock();
+  }
+
+  /** Ends the run and shows the summary. */
+  private endRun(): void {
+    const run = this.run;
+    if (!run) return;
+    const summary = {
+      wave: this.hud.wave,
+      score: Math.floor(run.score),
+      level: run.level,
+      tank: run.player.def.name,
+      seed: run.seed,
+    };
+    const isBest = recordRun(run.difficulty, summary);
+    this.screen = 'dead';
+    this.overlay = null;
+    mount(
+      buildDeath(
+        { ...summary, isBest },
+        () => this.startRun(),
+        () => this.showTitle(),
+      ),
+    );
     this.loop.resetClock();
   }
 
@@ -126,16 +229,19 @@ export class App {
     return this.screen === 'run' && this.overlay === null && !!this.run;
   }
 
+  // --- Frame ---------------------------------------------------------------
+
   private tick(): void {
     if (this.input.consumePause() && this.screen === 'run') {
-      this.setOverlay(this.overlay === 'pause' ? null : 'pause');
+      if (this.overlay === 'pause') this.resumeRun();
+      else if (!this.overlay) this.showPause();
       return;
     }
     if (!this.simRunning || !this.run) return;
 
     const run = this.run;
     this.input.sample((screen) => this.camera.screenToWorld(screen), this.intent);
-    // Aim is relative to the tank, not the screen centre, once the camera lags.
+    // Aim from the tank, not the screen centre, since the camera lags behind it.
     const aim = this.intent.autoSpin
       ? this.input.tickAim(this.intent)
       : Math.atan2(
@@ -158,9 +264,12 @@ export class App {
       }
     }
 
-    if (run.over) this.setScreen('dead');
+    if (run.over) this.endRun();
 
-    if (this.input.autoFire !== this.settings.autoFire || this.input.autoSpin !== this.settings.autoSpin) {
+    if (
+      this.input.autoFire !== this.settings.autoFire ||
+      this.input.autoSpin !== this.settings.autoSpin
+    ) {
       this.settings = saveSettings({
         autoFire: this.input.autoFire,
         autoSpin: this.input.autoSpin,
@@ -174,33 +283,45 @@ export class App {
     this.lastFrame = now;
 
     const { ctx } = this;
-    if (this.screen === 'run' || this.screen === 'dead') {
-      const run = this.run;
-      if (!run) return;
 
-      const zoomOffset = this.intent.secondary && run.player.def.flags.zoom
+    if (this.screen === 'tree' && this.tree) {
+      this.tree.render(ctx, this.width, this.height, dt);
+      return;
+    }
+
+    if (this.screen === 'title') {
+      // The menu sits over a plain field; no world exists yet to show.
+      ctx.fillStyle = '#c4c4c4';
+      ctx.fillRect(0, 0, this.width, this.height);
+      return;
+    }
+
+    const run = this.run;
+    if (!run) return;
+
+    const zoomOffset =
+      this.intent.secondary && run.player.def.flags.zoom
         ? vec(Math.cos(run.player.angle) * 1500, Math.sin(run.player.angle) * 1500)
         : null;
-      this.camera.follow(run.player.pos, run.player.fieldOfView(), zoomOffset);
-      this.camera.update(dt);
+    this.camera.follow(run.player.pos, run.player.fieldOfView(), zoomOffset);
+    this.camera.update(dt);
 
-      drawWorld(ctx, run.world, this.camera, this.simRunning ? alpha : 1, this.width, this.height);
-      drawHud(ctx, run, this.hud, this.width, this.height);
-      if (this.input.touchAvailable && !this.input.usingMouse) {
-        drawTouchSticks(ctx, this.input.touch);
-      }
-      if (this.showDebug) {
-        drawDebug(
-          ctx,
-          [
-            `tick ${run.world.tick}`,
-            `entities ${run.world.entities.length}`,
-            `zoom ${this.camera.zoom.toFixed(3)}`,
-            `seed ${run.seed}`,
-          ],
-          this.width,
-        );
-      }
+    drawWorld(ctx, run.world, this.camera, this.simRunning ? alpha : 1, this.width, this.height);
+    drawHud(ctx, run, this.hud, this.width, this.height);
+    if (this.input.touchAvailable && !this.input.usingMouse) {
+      drawTouchSticks(ctx, this.input.touch);
+    }
+    if (this.showDebug) {
+      drawDebug(
+        ctx,
+        [
+          `tick ${run.world.tick}`,
+          `entities ${run.world.entities.length}`,
+          `zoom ${this.camera.zoom.toFixed(3)}`,
+          `seed ${run.seed}`,
+        ],
+        this.width,
+      );
     }
   }
 
