@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "data": "node --experimental-strip-types tools/convert-tanks.ts"
+    "data": "node --experimental-strip-types tools/convert-tanks.ts",
+    "test": "node --experimental-strip-types --test tests/*.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.3",
