@@ -7,7 +7,7 @@ three cards, and class upgrades unlock at levels 15, 30 and 45. Death ends the r
 
 Single-player, no server, no accounts. TypeScript and Canvas 2D, built with Vite.
 
-**Play it: https://willknudson-capbpm.github.io/Dreadnought/**
+**Play it: https://wknudson.github.io/Dreadnought/**
 
 Works with a mouse and keyboard or with two thumbs on a phone.
 
