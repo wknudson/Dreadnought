@@ -1,4 +1,5 @@
 import type { Run } from '../sim/run.ts';
+import { Tank } from '../sim/tank.ts';
 import { COLORS } from '../data/colors.ts';
 import { levelProgress, MAX_LEVEL } from '../data/leveling.ts';
 import type { TouchSticks } from '../core/input.ts';
@@ -103,7 +104,85 @@ export function drawHud(
 
   drawWaveStatus(ctx, run, width, scale);
   drawPerks(ctx, run, height, scale);
+  drawMinimap(ctx, run, width, height, scale);
   drawBanner(ctx, state, width, height, scale);
+}
+
+/**
+ * The arena in miniature, bottom right.
+ *
+ * Worth the corner it takes up because the camera shows only part of the arena,
+ * and a wave arriving behind you is otherwise a surprise rather than a decision.
+ * Enemies are dots, the boss is a larger one, and the box is what you can see.
+ */
+function drawMinimap(
+  ctx: CanvasRenderingContext2D,
+  run: Run,
+  width: number,
+  height: number,
+  scale: number,
+): void {
+  const size = Math.round(Math.min(140, Math.max(84, width * 0.13)));
+  const pad = Math.round(14 * scale);
+  const x = width - size - pad;
+  // On a phone the bottom right corner belongs to the thumb buttons and the
+  // level bars, so the map moves up out of their way.
+  const narrow = width < 640;
+  const y = narrow ? Math.round(74 * scale) : height - size - pad;
+
+  const half = run.world.arena.halfSize;
+  const toMap = (wx: number, wy: number): [number, number] => [
+    x + ((wx + half) / (half * 2)) * size,
+    y + ((wy + half) / (half * 2)) * size,
+  ];
+
+  ctx.save();
+  ctx.globalAlpha = 0.78;
+  ctx.fillStyle = COLORS.background;
+  ctx.strokeStyle = COLORS.border;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.rect(x, y, size, size);
+  ctx.fill();
+  ctx.stroke();
+
+  // Clip so nothing outside the arena bleeds past the frame.
+  ctx.beginPath();
+  ctx.rect(x, y, size, size);
+  ctx.clip();
+  ctx.globalAlpha = 1;
+
+  for (const e of run.world.entities) {
+    if (!e.alive || e.kind === 'projectile' || e.kind === 'pickup') continue;
+    if (e === run.player) continue;
+    const [mx, my] = toMap(e.pos.x, e.pos.y);
+    const boss = e instanceof Tank && e.isBoss;
+    ctx.fillStyle = boss ? COLORS.enemyRed : e.team === 'enemy' ? COLORS.enemyRed : COLORS.border;
+    ctx.globalAlpha = boss ? 1 : 0.65;
+    ctx.beginPath();
+    ctx.arc(mx, my, boss ? 5 : 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // The player last, as a triangle pointing the way they face.
+  const [px, py] = toMap(run.player.pos.x, run.player.pos.y);
+  ctx.globalAlpha = 1;
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(run.player.angle);
+  ctx.fillStyle = run.player.color;
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(6, 0);
+  ctx.lineTo(-4, 4);
+  ctx.lineTo(-4, -4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.restore();
 }
 
 /** Wave number along the top, with either a countdown or what is left to kill. */

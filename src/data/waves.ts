@@ -3,7 +3,7 @@ import type { ShapeKind } from './shapes.ts';
 import type { DifficultyId } from '../core/storage.ts';
 import type { BossId } from './bosses.ts';
 import { BOSS_ORDER } from './bosses.ts';
-import { ARENA_GROWTH_PER_STAGE, DEFAULT_ARENA_HALF_SIZE } from '../sim/world.ts';
+import { DEFAULT_ARENA_HALF_SIZE } from '../sim/world.ts';
 
 /** How hard the run pushes back. */
 export interface Difficulty {
@@ -111,9 +111,25 @@ export interface WaveDef {
   arenaHalfSize: number;
 }
 
-export const arenaSizeForWave = (wave: number): number =>
-  DEFAULT_ARENA_HALF_SIZE +
-  ARENA_GROWTH_PER_STAGE * Math.floor(Math.max(0, wave - 1) / BOSS_INTERVAL);
+/**
+ * How much wider the arena is than at the start, by wave.
+ *
+ * Clearing a boss earns room, which is both a reward and a necessity: later
+ * waves field far more at once.
+ */
+export const arenaStageMultiplier = (wave: number): number =>
+  1 + 0.32 * Math.floor(Math.max(0, wave - 1) / BOSS_INTERVAL);
+
+/**
+ * Half-width of the arena for a wave, in diep units.
+ *
+ * Measured against what the camera can actually show rather than fixed, because
+ * a phone in portrait sees a quarter of the world width a desktop does. A fixed
+ * arena is either most of the screen on one and a rumour on the other, with the
+ * waves spawning somewhere out of sight.
+ */
+export const arenaSizeForWave = (wave: number, viewReference = DEFAULT_ARENA_HALF_SIZE): number =>
+  Math.max(700, viewReference) * arenaStageMultiplier(wave);
 
 /** What a wave is allowed to spend. Grows steadily rather than in jumps. */
 export const budgetForWave = (wave: number, difficulty: Difficulty): number =>

@@ -19,6 +19,7 @@ import { clearUi, mount } from './ui/dom.ts';
 import { buildDeath, buildPause, buildTitle } from './ui/title.ts';
 import { buildCardChoice, buildClassUpgrade, buildVictory } from './ui/overlays.ts';
 import { TreeViewer } from './ui/tree.ts';
+import { buildTouchControls, type TouchControls } from './ui/touch.ts';
 
 export type Screen = 'title' | 'tree' | 'run' | 'dead';
 export type Overlay = null | 'pause' | 'cards' | 'classUpgrade';
@@ -53,6 +54,7 @@ export class App {
   private lastFrame = performance.now();
   private showDebug = false;
   private tree: TreeViewer | null = null;
+  private touchControls: TouchControls | null = null;
   /** Where to return when the tree is closed. */
   private treeReturn: Screen = 'title';
 
@@ -169,6 +171,7 @@ export class App {
       this.presentNextChoice(run);
       return;
     }
+    this.showRunControls();
     this.loop.resetClock();
   }
 
@@ -210,6 +213,22 @@ export class App {
     this.canvas.style.height = `${this.height}px`;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.camera.resize(this.width, this.height);
+    this.syncArenaToView();
+  }
+
+  /**
+   * Sizes the arena against what this screen can actually show.
+   *
+   * The longer edge is the reference, so a tall phone gets an arena it can see
+   * down the length of rather than one four screens wide.
+   */
+  private syncArenaToView(): void {
+    const run = this.run;
+    if (!run) return;
+    const zoom = run.player.fieldOfView() * Math.max(this.height / 1080, this.width / 1920);
+    const halfWidth = this.width / 2 / zoom;
+    const halfHeight = this.height / 2 / zoom;
+    run.setViewReference(Math.max(halfWidth, halfHeight));
   }
 
   // --- Screens -------------------------------------------------------------
@@ -254,6 +273,23 @@ export class App {
   private closeTree(): void {
     this.tree?.destroy();
     this.tree = null;
+    this.touchControls?.destroy();
+    this.touchControls = null;
+  }
+
+  /**
+   * Shows the run itself, with the on-screen controls if this is a touch device.
+   *
+   * Mounted rather than always present because the layer has to be absent while
+   * an overlay is up, or its buttons sit on top of the cards.
+   */
+  private showRunControls(): void {
+    if (!this.input.touchAvailable || this.input.usingMouse) {
+      clearUi();
+      return;
+    }
+    this.touchControls = buildTouchControls(this.input, () => this.showPause());
+    mount(this.touchControls.root);
   }
 
   startRun(): void {
@@ -264,12 +300,13 @@ export class App {
       difficulty: this.settings.difficulty,
       color: this.playerColor,
     });
+    this.syncArenaToView();
     this.camera.follow(this.run.player.pos, this.run.player.fieldOfView());
     this.camera.snap();
     this.screen = 'run';
     this.overlay = null;
-    clearUi();
     this.input.releaseAll();
+    this.showRunControls();
     this.loop.resetClock();
   }
 
@@ -277,7 +314,7 @@ export class App {
     this.closeTree();
     this.screen = 'run';
     this.overlay = null;
-    clearUi();
+    this.showRunControls();
     this.loop.resetClock();
   }
 
@@ -395,6 +432,7 @@ export class App {
         autoFire: this.input.autoFire,
         autoSpin: this.input.autoSpin,
       });
+      this.touchControls?.refresh();
     }
   }
 

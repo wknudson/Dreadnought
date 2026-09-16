@@ -235,6 +235,8 @@ body {
 .overlay-screen {
   background: rgba(10, 12, 16, 0.55);
   backdrop-filter: blur(3px);
+  overflow-y: auto;
+  padding: 16px;
 }
 
 .death-stats {
@@ -333,6 +335,62 @@ body {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.4);
+}
+
+/* --- Touch controls ------------------------------------------------------ */
+
+/*
+ * The layer ignores touches so the joysticks underneath still work; only the
+ * buttons themselves take input.
+ */
+.touch-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.touch-btn {
+  position: absolute;
+  pointer-events: auto;
+  appearance: none;
+  border: 2px solid rgba(0, 0, 0, 0.3);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  color: #16181c;
+  font: 700 15px/1 Ubuntu, system-ui, sans-serif;
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  touch-action: none;
+  transition: background 0.1s ease, transform 0.06s ease;
+}
+
+.touch-btn.is-held,
+.touch-btn.is-on {
+  background: var(--accent);
+  color: #04222c;
+  transform: scale(0.94);
+}
+
+.touch-pause {
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  width: 46px;
+  height: 46px;
+  font-size: 17px;
+  letter-spacing: 2px;
+}
+
+.touch-secondary {
+  right: max(16px, env(safe-area-inset-right));
+  bottom: calc(96px + env(safe-area-inset-bottom));
+}
+
+.touch-auto {
+  right: calc(max(16px, env(safe-area-inset-right)) + 76px);
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  font-size: 13px;
 }
 
 /* --- Cards --------------------------------------------------------------- */
@@ -481,6 +539,57 @@ body {
 @media (max-width: 720px) {
   .title-card {
     padding: 26px 20px 24px;
+  }
+
+  .panel,
+  .panel-wide {
+    padding: 22px 18px;
+    max-width: 100%;
+  }
+
+  .panel h2 {
+    font-size: 22px;
+  }
+
+  /* Three cards side by side do not fit a phone; stack them instead. */
+  .choices {
+    gap: 8px;
+  }
+
+  .choice {
+    width: 100%;
+    max-width: 340px;
+    grid-template-columns: 74px 1fr;
+    grid-template-areas: 'icon name' 'icon blurb' 'icon tier';
+    justify-items: start;
+    text-align: left;
+    padding: 10px 14px;
+  }
+
+  .choice-icon,
+  .card-pip {
+    grid-area: icon;
+    align-self: center;
+    margin: 0;
+  }
+
+  .card-pip {
+    width: 38px;
+    height: 38px;
+  }
+
+  .choice-name {
+    grid-area: name;
+  }
+
+  .choice-blurb {
+    grid-area: blurb;
+    text-align: left;
+    min-height: 0;
+  }
+
+  .choice-tier {
+    grid-area: tier;
   }
 
   .tree-side {

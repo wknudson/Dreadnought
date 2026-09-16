@@ -8,7 +8,7 @@ import { Projectile, raiseNecroDrone } from './projectiles.ts';
 import { getTank, ROOT_TANK_ID } from '../data/tanks.ts';
 import { CARD_LEVELS, CLASS_LEVELS, levelForXp, MAX_LEVEL, xpForLevel } from '../data/leveling.ts';
 import type { DifficultyId } from '../core/storage.ts';
-import { DIFFICULTIES, type Difficulty } from '../data/waves.ts';
+import { DIFFICULTIES, arenaSizeForWave, type Difficulty } from '../data/waves.ts';
 import { WaveDirector, type WarningRing } from './waves.ts';
 import { PerkSet } from './perks.ts';
 import { xpMultiplierFor, type PerkDefinition, type PerkHost } from './perkImpl.ts';
@@ -420,5 +420,19 @@ export class Run implements PerkHost {
   /** Where the player is, for anything that needs to follow them. */
   get focus(): Vec2 {
     return this.player.pos;
+  }
+
+  /**
+   * Tells the run how much world the camera can show.
+   *
+   * The arena is sized against this so the playfield is comparable on a phone
+   * and a monitor, rather than fixed in units and therefore invisible on one.
+   */
+  setViewReference(halfWidthInUnits: number): void {
+    this.waves.viewReference = halfWidthInUnits;
+    const target = arenaSizeForWave(this.wave || 1, halfWidthInUnits);
+    this.world.arena.targetHalfSize = target;
+    // The opening frame should not start mid-tween.
+    if (this.world.tick < 2) this.world.arena.halfSize = target;
   }
 }

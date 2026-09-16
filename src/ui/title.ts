@@ -4,6 +4,14 @@ import { getTank, ROOT_TANK_ID } from '../data/tanks.ts';
 import { paintTankInto } from '../render/iconCache.ts';
 import { el, button } from './dom.ts';
 
+/** How to play, in the terms of whatever device is being used. */
+function controlHint(): string {
+  const touch = (navigator.maxTouchPoints ?? 0) > 0;
+  return touch
+    ? 'Left thumb to drive, right thumb to aim and fire. ALT is the secondary action, AUTO holds the trigger down.'
+    : 'Move with WASD. Aim with the mouse, fire with click or space. E toggles auto-fire, C auto-spin, Escape pauses.';
+}
+
 const DIFFICULTIES: { id: DifficultyId; name: string; blurb: string }[] = [
   { id: 'easy', name: 'Easy', blurb: 'Fewer enemies, and they hit softer.' },
   { id: 'normal', name: 'Normal', blurb: 'The intended fight.' },
@@ -105,11 +113,7 @@ export function buildTitle(options: TitleOptions): HTMLElement {
         button('Tank Tree', options.onViewTree, { class: 'btn' }),
       ),
 
-      el(
-        'p',
-        { class: 'hint' },
-        'Move with WASD. Aim with the mouse, fire with click or space. E toggles auto-fire, C auto-spin, Escape pauses.',
-      ),
+      el('p', { class: 'hint' }, controlHint()),
     ),
   );
 }

@@ -24,6 +24,7 @@ import { SHINY_CHANCE, type ShapeKind } from '../data/shapes.ts';
 import type { Entity } from './entity.ts';
 import { vec, type Vec2 } from '../core/math.ts';
 import { TICKS_PER_SECOND } from '../core/loop.ts';
+import { DEFAULT_ARENA_HALF_SIZE } from './world.ts';
 
 /** What the director is doing right now. */
 export type WavePhase = 'idle' | 'incoming' | 'fighting' | 'breather' | 'won';
@@ -89,6 +90,11 @@ export class WaveDirector {
 
   /** The player's level, which boss scaling reads. Kept current by the run. */
   playerLevel = 1;
+  /**
+   * Half the world width the camera can show, which the arena is sized against.
+   * Updated by the app whenever the window changes.
+   */
+  viewReference = DEFAULT_ARENA_HALF_SIZE;
 
   constructor(
     world: World,
@@ -204,7 +210,7 @@ export class WaveDirector {
     this.phase = 'incoming';
 
     // The arena widens as the run goes on, so late waves are not a scrum.
-    this.world.arena.targetHalfSize = arenaSizeForWave(index);
+    this.world.arena.targetHalfSize = arenaSizeForWave(index, this.viewReference);
 
     const boss = this.current.boss;
     this.bossName = boss ? getBoss(boss).name : null;

@@ -251,6 +251,8 @@ export class TouchSticks {
 
   attach(canvas: HTMLCanvasElement, register: (detach: () => void) => void): void {
     const start = (e: TouchEvent): void => {
+      // A touch that began on a button belongs to the button, not to a stick.
+      if (e.target !== canvas) return;
       for (const t of Array.from(e.changedTouches)) {
         const point = vec(t.clientX, t.clientY);
         const leftHalf = point.x < window.innerWidth / 2;
