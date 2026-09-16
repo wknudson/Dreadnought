@@ -110,7 +110,7 @@ export const SHAPES: Readonly<Record<ShapeKind, ShapeDefinition>> = {
     absorbtionFactor: 2,
     driftSpeed: 0.8,
     playerBias: 0.3,
-    chase: { detectRadius: 900, acceleration: 3.2 },
+    chase: { detectRadius: 900, acceleration: 9 },
   },
   largeCrasher: {
     kind: 'largeCrasher',
@@ -125,7 +125,7 @@ export const SHAPES: Readonly<Record<ShapeKind, ShapeDefinition>> = {
     absorbtionFactor: 0.1,
     driftSpeed: 0.6,
     playerBias: 0.3,
-    chase: { detectRadius: 700, acceleration: 2.4 },
+    chase: { detectRadius: 700, acceleration: 7 },
   },
 };
 

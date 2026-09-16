@@ -25,6 +25,17 @@ Other scripts: `npm run build` (typecheck then bundle), `npm run preview`,
 `npm run typecheck`, `npm test`, and `npm run data` to regenerate the tank table
 on its own.
 
+## Balance
+
+`npm run balance` plays two dozen full runs without a browser and reports how
+long each took, how far it got, and how long each boss stood up. The bot is
+deliberately mediocre, so its numbers are an upper bound on run length rather
+than a target. It is the fastest way to tell whether a change made the game
+longer, shorter, or impossible, and it found every stalling bug in the wave
+system before a human ever saw one.
+
+While playing, Shift+L grants a level and Shift+K skips to the next wave.
+
 ## Tank data
 
 `src/data/tanks.generated.ts` is generated, not written by hand. The generator

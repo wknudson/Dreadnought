@@ -106,13 +106,15 @@ export class SpatialHash {
 /**
  * Starting half-width of the playfield, in diep units.
  *
- * A level-1 tank sees roughly 3500 units across, so this shows most of the arena
- * at once without the walls crowding the view. It grows as bosses fall.
+ * Matched to what a level-1 tank can see, so the first wave arrives in view
+ * rather than out of it: enemies enter at the perimeter, and a perimeter beyond
+ * the edge of the screen just means several seconds of staring at nothing.
+ * The arena widens as bosses fall and the camera pulls back with level.
  */
-export const DEFAULT_ARENA_HALF_SIZE = 2200;
+export const DEFAULT_ARENA_HALF_SIZE = 1300;
 
 /** Added to the arena half-width each time a boss wave is cleared. */
-export const ARENA_GROWTH_PER_STAGE = 450;
+export const ARENA_GROWTH_PER_STAGE = 420;
 
 export interface Arena {
   /** Half the arena's width. The playfield spans -halfSize to +halfSize on both axes. */

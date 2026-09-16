@@ -61,6 +61,11 @@ export class Tank extends Entity implements BarrelOwner, DroneCommander {
   name = '';
   score = 0;
 
+  /** Set on bosses, which are drawn larger and announced when they arrive. */
+  isBoss = false;
+  /** Experience for killing this tank, when it is worth more than its size implies. */
+  bossXp = 0;
+
   /** The intent this tank acted on last tick, kept for rendering and AI. */
   lastIntent: TankIntent = idleIntent();
 

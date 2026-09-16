@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "data": "node --experimental-strip-types tools/convert-tanks.ts",
-    "check": "npm run data && npm test && npm run build"
+    "check": "npm run data && npm test && npm run build",
+    "balance": "node --experimental-strip-types tools/balance.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.3",

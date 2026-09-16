@@ -63,10 +63,10 @@ function bar(
 }
 
 export interface HudState {
-  /** Wave number, or 0 before waves begin. */
-  wave: number;
-  /** Seconds left in the break between waves, or 0 during a wave. */
-  countdown: number;
+  /** Ticks since a new wave was announced, for the banner that fades in and out. */
+  bannerTicks: number;
+  /** What the banner says, if anything. */
+  bannerText: string;
 }
 
 export function drawHud(
@@ -101,19 +101,93 @@ export function drawHud(
     `Score: ${Math.floor(run.score).toLocaleString()}`,
   );
 
-  if (state.wave > 0) {
-    outlinedText(ctx, `Wave ${state.wave}`, width / 2, 34 * scale, 28 * scale);
-    if (state.countdown > 0) {
-      outlinedText(
-        ctx,
-        `Next wave in ${Math.ceil(state.countdown)}`,
-        width / 2,
-        66 * scale,
-        20 * scale,
-      );
-    }
+  drawWaveStatus(ctx, run, width, scale);
+  drawPerks(ctx, run, height, scale);
+  drawBanner(ctx, state, width, height, scale);
+}
+
+/** Wave number along the top, with either a countdown or what is left to kill. */
+function drawWaveStatus(
+  ctx: CanvasRenderingContext2D,
+  run: Run,
+  width: number,
+  scale: number,
+): void {
+  if (run.wave <= 0) return;
+  outlinedText(ctx, `Wave ${run.wave}`, width / 2, 30 * scale, 27 * scale);
+
+  const countdown = run.countdown;
+  if (countdown > 0) {
+    outlinedText(ctx, `Next wave in ${Math.ceil(countdown)}`, width / 2, 60 * scale, 19 * scale);
+    return;
+  }
+
+  if (run.bossName) {
+    outlinedText(ctx, run.bossName, width / 2, 60 * scale, 20 * scale);
+    return;
+  }
+
+  const left = run.enemiesLeft;
+  if (left > 0) {
+    outlinedText(ctx, `${left} left`, width / 2, 58 * scale, 17 * scale);
   }
 }
+
+/** The perks collected so far, stacked up the left edge. */
+function drawPerks(
+  ctx: CanvasRenderingContext2D,
+  run: Run,
+  height: number,
+  scale: number,
+): void {
+  const perks = run.perkSummary();
+  if (!perks.length) return;
+  const size = 13 * scale;
+  ctx.save();
+  ctx.font = `700 ${size}px ${FONT}`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'bottom';
+  perks.forEach((perk, i) => {
+    const label = perk.stacks > 1 ? `${perkName(perk.id)} x${perk.stacks}` : perkName(perk.id);
+    const y = height - 90 * scale - i * (size + 5);
+    ctx.lineWidth = size * 0.3;
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#000000';
+    ctx.strokeText(label, 14, y);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(label, 14, y);
+  });
+  ctx.restore();
+}
+
+/** Perk identifiers are kebab-case; this is enough to read them back. */
+function perkName(id: string): string {
+  return id
+    .split('-')
+    .map((word) => word[0]!.toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+/** A large announcement that fades in and out, for a new wave or a boss. */
+function drawBanner(
+  ctx: CanvasRenderingContext2D,
+  state: HudState,
+  width: number,
+  height: number,
+  scale: number,
+): void {
+  if (!state.bannerText || state.bannerTicks > BANNER_TICKS) return;
+  const t = state.bannerTicks / BANNER_TICKS;
+  // Hold at full opacity in the middle, fading at either end.
+  const alpha = Math.min(1, Math.min(t * 6, (1 - t) * 4));
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, alpha);
+  outlinedText(ctx, state.bannerText, width / 2, height * 0.32, 40 * scale);
+  ctx.restore();
+}
+
+/** How long a wave announcement stays on screen, in ticks. */
+export const BANNER_TICKS = 70;
 
 /** Draws whichever touch joysticks are currently held. */
 export function drawTouchSticks(ctx: CanvasRenderingContext2D, sticks: TouchSticks): void {

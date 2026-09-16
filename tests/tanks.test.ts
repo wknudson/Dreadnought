@@ -28,7 +28,8 @@ const intent = (over: Partial<Intent> = {}): Intent => ({
 /** A run as the given class, at max level, in an arena cleared of stray shapes. */
 function runAs(tankId: string, seed = 7): Run {
   const run = new Run({ seed, difficulty: 'normal', color: '#00B2E1' });
-  run.targetShapeCount = 0;
+  // A still arena: these tests are about one tank's weapons, not about surviving.
+  run.waves.halt();
   for (const e of run.world.entities) if (e instanceof Shape) e.alive = false;
   run.addXp(30000);
   run.player.upgradeTo(getTank(tankId));

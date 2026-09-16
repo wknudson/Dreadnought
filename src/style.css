@@ -335,6 +335,37 @@ body {
   color: rgba(255, 255, 255, 0.4);
 }
 
+/* --- Cards --------------------------------------------------------------- */
+
+.card {
+  position: relative;
+  overflow: hidden;
+  border-color: var(--accent-card, rgba(255, 255, 255, 0.12));
+}
+
+.card:hover {
+  border-color: var(--accent-card, var(--accent));
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.card-pip {
+  display: block;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  margin: 6px 0 10px;
+  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.25);
+}
+
+.card .choice-blurb {
+  min-height: 48px;
+}
+
+.card-rare .choice-tier {
+  color: #f9c846;
+  font-weight: 700;
+}
+
 /* --- Tank tree ----------------------------------------------------------- */
 
 .tree-screen {

@@ -10,14 +10,14 @@ import {
 } from './core/storage.ts';
 import { Camera } from './render/camera.ts';
 import { drawWorld } from './render/drawWorld.ts';
-import { drawHud, drawTouchSticks, drawDebug, type HudState } from './render/hud.ts';
+import { drawHud, drawTouchSticks, drawDebug, BANNER_TICKS, type HudState } from './render/hud.ts';
 import { clearIconCache } from './render/iconCache.ts';
 import { Run, type PendingChoice } from './sim/run.ts';
 import { PLAYER_COLORS } from './data/colors.ts';
 import { vec } from './core/math.ts';
 import { clearUi, mount } from './ui/dom.ts';
 import { buildDeath, buildPause, buildTitle } from './ui/title.ts';
-import { buildClassUpgrade } from './ui/overlays.ts';
+import { buildCardChoice, buildClassUpgrade, buildVictory } from './ui/overlays.ts';
 import { TreeViewer } from './ui/tree.ts';
 
 export type Screen = 'title' | 'tree' | 'run' | 'dead';
@@ -47,7 +47,9 @@ export class App {
 
   private readonly loop: FixedLoop;
   private readonly intent: Intent = emptyIntent();
-  private hud: HudState = { wave: 0, countdown: 0 };
+  private hud: HudState = { bannerTicks: BANNER_TICKS + 1, bannerText: '' };
+  /** The wave the banner is currently announcing, so it shows once per wave. */
+  private announcedWave = 0;
   private lastFrame = performance.now();
   private showDebug = false;
   private tree: TreeViewer | null = null;
@@ -90,9 +92,41 @@ export class App {
       if (e.code === 'KeyL' && e.shiftKey && this.screen === 'run') {
         this.run?.debugGrantLevel();
       }
+      // Shift+K skips to the next wave, for reaching a boss without the grind.
+      if (e.code === 'KeyK' && e.shiftKey && this.screen === 'run' && this.run) {
+        this.run.waves.jumpTo(this.run.wave + 1);
+      }
     });
 
     this.onChoice('class', (run) => this.showClassUpgrade(run));
+    this.onChoice('card', (run) => this.showCardChoice(run));
+  }
+
+  /** Presents the pick-one-of-three earned by levelling. */
+  private showCardChoice(run: Run): void {
+    const hand = run.dealHand();
+    if (!hand.length) {
+      run.consumeChoice('card');
+      return;
+    }
+    this.input.releaseAll();
+    const render = (): void => {
+      mount(
+        buildCardChoice({
+          hand: run.hand,
+          level: run.level,
+          rerolls: run.rerolls,
+          onPick: (card) => {
+            run.takeCard(card);
+            this.afterChoice();
+          },
+          onReroll: () => {
+            if (run.reroll()) render();
+          },
+        }),
+      );
+    };
+    render();
   }
 
   /** Presents the class choices earned at levels 15, 30 and 45. */
@@ -224,6 +258,7 @@ export class App {
 
   startRun(): void {
     this.closeTree();
+    this.announcedWave = 0;
     this.run = new Run({
       seed: seedFromLocation(),
       difficulty: this.settings.difficulty,
@@ -259,28 +294,54 @@ export class App {
     this.loop.resetClock();
   }
 
-  /** Ends the run and shows the summary. */
+  /** Ends the run and shows the summary, whether it was lost or won. */
   private endRun(): void {
     const run = this.run;
     if (!run) return;
     const summary = {
-      wave: this.hud.wave,
+      wave: run.wave,
       score: Math.floor(run.score),
       level: run.level,
       tank: run.player.def.name,
       seed: run.seed,
     };
-    const isBest = recordRun(run.difficulty, summary);
+    const isBest = recordRun(run.difficultyId, summary);
     this.screen = 'dead';
     this.overlay = null;
+
     mount(
-      buildDeath(
-        { ...summary, isBest },
-        () => this.startRun(),
-        () => this.showTitle(),
-      ),
+      run.outcome === 'won'
+        ? buildVictory({
+            score: summary.score,
+            level: summary.level,
+            tank: summary.tank,
+            seed: summary.seed,
+            onAgain: () => this.startRun(),
+            onTitle: () => this.showTitle(),
+          })
+        : buildDeath(
+            { ...summary, isBest },
+            () => this.startRun(),
+            () => this.showTitle(),
+          ),
     );
     this.loop.resetClock();
+  }
+
+  /**
+   * Shows the wave banner once per wave.
+   *
+   * Driven by comparing the wave number rather than by a callback, so a wave
+   * that begins while an overlay is up is still announced when play resumes.
+   */
+  private updateBanner(run: Run): void {
+    if (run.wave !== this.announcedWave) {
+      this.announcedWave = run.wave;
+      this.hud.bannerTicks = 0;
+      this.hud.bannerText = run.bossName ?? `Wave ${run.wave}`;
+    } else if (this.hud.bannerTicks <= BANNER_TICKS) {
+      this.hud.bannerTicks++;
+    }
   }
 
   /** Registers the interface that resolves a kind of pending choice. */
@@ -319,6 +380,7 @@ export class App {
         );
     run.applyIntent(this.intent, aim);
     run.tick();
+    this.updateBanner(run);
 
     // A level-up that earned a choice holds the game until it is answered.
     if (run.waitingOnChoice && !this.overlay) this.presentNextChoice(run);
@@ -365,7 +427,15 @@ export class App {
     this.camera.follow(run.player.pos, run.player.fieldOfView(), zoomOffset);
     this.camera.update(dt);
 
-    drawWorld(ctx, run.world, this.camera, this.simRunning ? alpha : 1, this.width, this.height);
+    drawWorld(
+      ctx,
+      run.world,
+      this.camera,
+      this.simRunning ? alpha : 1,
+      this.width,
+      this.height,
+      run.warnings,
+    );
     drawHud(ctx, run, this.hud, this.width, this.height);
     if (this.input.touchAvailable && !this.input.usingMouse) {
       drawTouchSticks(ctx, this.input.touch);
@@ -376,6 +446,8 @@ export class App {
         [
           `tick ${run.world.tick}`,
           `entities ${run.world.entities.length}`,
+          `wave ${run.wave} (${run.waves.phase})`,
+          `enemies ${run.enemiesLeft}`,
           `zoom ${this.camera.zoom.toFixed(3)}`,
           `seed ${run.seed}`,
         ],

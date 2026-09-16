@@ -7,9 +7,13 @@ import { Shape } from './shape.ts';
 import { Projectile, raiseNecroDrone } from './projectiles.ts';
 import { getTank, ROOT_TANK_ID } from '../data/tanks.ts';
 import { CARD_LEVELS, CLASS_LEVELS, levelForXp, MAX_LEVEL, xpForLevel } from '../data/leveling.ts';
-import type { ShapeKind } from '../data/shapes.ts';
-import { SHINY_CHANCE } from '../data/shapes.ts';
 import type { DifficultyId } from '../core/storage.ts';
+import { DIFFICULTIES, type Difficulty } from '../data/waves.ts';
+import { WaveDirector, type WarningRing } from './waves.ts';
+import { PerkSet } from './perks.ts';
+import { xpMultiplierFor, type PerkDefinition, type PerkHost } from './perkImpl.ts';
+import { dealCards, type Card } from '../data/cards.ts';
+import { aiContext } from './ai.ts';
 import { lerp, vec, type Vec2 } from '../core/math.ts';
 
 /** A decision waiting on the player, which holds the simulation while it stands. */
@@ -38,64 +42,123 @@ export interface RunOptions {
   playerName?: string;
 }
 
+/** How a run ended. */
+export type RunOutcome = 'alive' | 'died' | 'won';
+
 /**
  * One attempt: a world, a player, and the progression wrapped around them.
  *
- * The run owns experience and levelling, queues the choices a level-up earns,
- * and keeps the arena stocked. It knows nothing about rendering or input
- * devices, which is what lets the same run be driven by a keyboard or a thumb.
+ * The run owns experience, levelling, the waves and the perks. It knows nothing
+ * about rendering or input devices, which is what lets the same run be driven by
+ * a keyboard, a thumb, or a test.
  */
-export class Run {
+export class Run implements PerkHost {
   readonly world: World;
   readonly player: Tank;
   readonly rng: Rng;
   readonly seed: number;
-  readonly difficulty: DifficultyId;
+  readonly difficultyId: DifficultyId;
+  readonly difficulty: Difficulty;
+  readonly waves: WaveDirector;
+  readonly perks = new PerkSet();
 
   xp = 0;
   score = 0;
   level = 1;
 
+  /** Rerolls the player may spend on a hand of cards. */
+  rerolls = 0;
+
   /** Decisions earned but not yet made, in the order they should be offered. */
   readonly pendingChoices: PendingChoice[] = [];
+  /** The hand currently on offer, while a card choice is open. */
+  hand: Card[] = [];
 
-  /** Levels whose class upgrade has already been offered, so it is offered once. */
-  private readonly classLevelsSeen = new Set<number>();
-
-  over = false;
-  /** Ticks since the player died, so the explosion can finish before the screen changes. */
+  outcome: RunOutcome = 'alive';
+  /** Ticks since the player died, so the explosion can finish. */
   ticksSinceDeath = 0;
 
+  /** Levels whose class upgrade has already been offered. */
+  private readonly classLevelsSeen = new Set<number>();
   private readonly control = new PlayerController();
-  private readonly shapeRng: Rng;
-
-  /** How many shapes to keep in the arena. Waves will take this over in Phase 3. */
-  targetShapeCount = 28;
+  private readonly cardRng: Rng;
+  /** Tracks the secondary button so a dash fires once per press, not per tick. */
+  private secondaryWasDown = false;
 
   constructor(options: RunOptions) {
     this.seed = options.seed;
-    this.difficulty = options.difficulty;
+    this.difficultyId = options.difficulty;
+    this.difficulty = DIFFICULTIES[options.difficulty];
     this.rng = new Rng(options.seed);
-    this.shapeRng = this.rng.fork('shapes');
+    this.cardRng = this.rng.fork('cards');
 
     this.world = new World(this.rng.fork('sim'));
-    this.world.arena = { halfSize: DEFAULT_ARENA_HALF_SIZE, targetHalfSize: DEFAULT_ARENA_HALF_SIZE };
+    this.world.arena = {
+      halfSize: DEFAULT_ARENA_HALF_SIZE,
+      targetHalfSize: DEFAULT_ARENA_HALF_SIZE,
+    };
 
     this.player = new Tank(getTank(ROOT_TANK_ID), 1, this.control, options.color);
     this.player.team = 'player';
     this.player.name = options.playerName ?? '';
     this.world.spawn(this.player);
+
     Shape.target = this.player;
+    aiContext.target = this.player;
 
     this.world.events.on('entityKilled', ({ victim, killer }) => this.onKill(victim, killer));
+    this.world.events.on('damageTaken', ({ victim, amount, source }) => {
+      if (victim === this.player) this.onPlayerHit(amount, source);
+    });
 
-    this.fillShapes(true);
+    this.waves = new WaveDirector(
+      this.world,
+      this.player,
+      this.rng.fork('waves'),
+      this.difficulty,
+      {
+        onWaveStart: () => {},
+        onWaveClear: () => this.perks.waveClear(this.world),
+        onRunWon: () => {
+          this.outcome = 'won';
+        },
+      },
+    );
+    this.waves.start();
+  }
+
+  // --- What the interface reads ---------------------------------------------
+
+  get wave(): number {
+    return this.waves.wave;
+  }
+
+  get countdown(): number {
+    return this.waves.countdownSeconds;
+  }
+
+  get bossName(): string | null {
+    return this.waves.bossName;
+  }
+
+  get warnings(): WarningRing[] {
+    return this.waves.warnings();
+  }
+
+  get enemiesLeft(): number {
+    return this.waves.remaining;
+  }
+
+  get over(): boolean {
+    return this.outcome !== 'alive';
   }
 
   /** True while a decision is outstanding, which is when the app holds the sim. */
   get waitingOnChoice(): boolean {
     return this.pendingChoices.length > 0;
   }
+
+  // --- Input ----------------------------------------------------------------
 
   /** Feeds this frame's input to the player's tank. */
   applyIntent(intent: Intent, aimAngle: number): void {
@@ -104,25 +167,32 @@ export class Run {
     c.moveY = intent.move.y;
     c.aimAngle = aimAngle;
     c.fire = intent.fire;
-    c.secondary = intent.secondary;
     // Drones fly to the cursor itself, not to the direction the hull faces.
     c.aimAt = intent.aimWorld;
+
+    // A perk may claim the secondary button, and only on the press itself.
+    const pressed = intent.secondary && !this.secondaryWasDown;
+    this.secondaryWasDown = intent.secondary;
+    c.secondary = intent.secondary;
+    if (pressed && this.perks.secondary(this.world)) c.secondary = false;
   }
 
-  /** Advances the simulation one tick. */
+  // --- Simulation -----------------------------------------------------------
+
   tick(): void {
     if (this.over) return;
 
     this.world.step(resolveContacts, () => this.tweenArena());
+    this.perks.tick(this.world);
 
     if (!this.player.alive) {
       this.ticksSinceDeath++;
       // Let the explosion play out before the run reports itself finished.
-      if (this.ticksSinceDeath > 38) this.over = true;
+      if (this.ticksSinceDeath > 38) this.outcome = 'died';
       return;
     }
 
-    this.fillShapes(false);
+    this.waves.tick();
   }
 
   /** Eases the arena toward its target size after a boss widens it. */
@@ -135,14 +205,19 @@ export class Run {
     arena.halfSize = lerp(arena.halfSize, arena.targetHalfSize, 0.02);
   }
 
+  // --- Progression ----------------------------------------------------------
+
   /** Awards experience and processes any levels it buys. */
   addXp(amount: number): void {
     if (amount <= 0 || this.level >= MAX_LEVEL) return;
-    this.xp += amount;
+    this.xp += amount * xpMultiplierFor(this.perks.stacksOf('scholar')) * this.difficulty.xpBonus;
+
     const newLevel = levelForXp(this.xp);
     while (this.level < newLevel) {
       this.level++;
       this.player.setLevel(this.level);
+      // Boss scaling reads the player's level, so keep the director current.
+      this.waves.playerLevel = this.level;
       this.world.events.emit('levelUp', { level: this.level });
       // A class upgrade is offered before the card earned at the same level, so
       // the card can be spent knowing what the tank has become.
@@ -152,6 +227,14 @@ export class Run {
       }
       if (CARD_LEVELS.has(this.level)) this.pendingChoices.push('card');
     }
+  }
+
+  addScore(amount: number): void {
+    this.score += amount;
+  }
+
+  grantReroll(): void {
+    this.rerolls++;
   }
 
   /** Takes the class upgrade the player chose. */
@@ -194,35 +277,112 @@ export class Run {
     return null;
   }
 
-  /** Grants a level outright. Used by the in-development level key. */
-  debugGrantLevel(): void {
-    if (this.level >= MAX_LEVEL) return;
-    this.addXp(Math.max(1, xpForLevel(this.level + 1) - this.xp));
+  // --- Cards ----------------------------------------------------------------
+
+  /** Deals a fresh hand for the pending card choice. */
+  dealHand(): Card[] {
+    this.hand = dealCards({
+      def: this.player.def,
+      points: this.player.points,
+      perks: this.perks,
+      host: this,
+      difficulty: this.difficulty,
+      rng: this.cardRng,
+    });
+    return this.hand;
+  }
+
+  /** Spends a reroll on a new hand. Returns false when none are left. */
+  reroll(): boolean {
+    if (this.rerolls <= 0) return false;
+    this.rerolls--;
+    this.dealHand();
+    return true;
+  }
+
+  /** Applies the card the player picked and clears the choice. */
+  takeCard(card: Card): void {
+    switch (card.kind) {
+      case 'stat':
+        this.player.points[card.stat]++;
+        this.player.refresh();
+        break;
+      case 'perk':
+        this.addPerk(card.perk);
+        break;
+      case 'heal':
+        this.player.health = Math.min(
+          this.player.maxHealth,
+          this.player.health + this.player.maxHealth * card.amount,
+        );
+        break;
+    }
+    this.hand = [];
+    this.consumeChoice('card');
+  }
+
+  private addPerk(def: PerkDefinition): void {
+    // Taking a perk again stacks the one already held rather than adding a second.
+    if (this.perks.has(def.id)) this.perks.add({ id: def.id, stacks: 1 });
+    else this.perks.add(def.create(this));
+    this.player.refresh();
+  }
+
+  /** Perks taken so far, for the run summary. */
+  perkSummary(): { id: string; stacks: number }[] {
+    return this.perks.all.map((p) => ({ id: p.id, stacks: p.stacks }));
+  }
+
+  // --- Events ---------------------------------------------------------------
+
+  /**
+   * Lets defensive perks take back some of a hit the player just received.
+   *
+   * Damage is applied first and refunded here rather than being intercepted,
+   * which keeps every source of damage going through one path.
+   */
+  private onPlayerHit(amount: number, source: unknown): void {
+    const reduced = this.perks.damageTaken(amount, (source as never) ?? null, this.world);
+    const refund = amount - reduced;
+    if (refund > 0) {
+      this.player.health = Math.min(this.player.maxHealth, this.player.health + refund);
+      if (this.player.health > 0) this.player.alive = true;
+    }
   }
 
   private onKill(victim: unknown, killer: unknown): void {
+    const byPlayer = killer === this.player;
+
     if (victim instanceof Shape) {
       victim.explode(this.world);
-      if (killer === this.player) {
+      this.waves.forget(victim);
+      if (byPlayer) {
         this.addXp(victim.xp);
         this.score += victim.xp;
         this.tryRaise(victim);
+        this.perks.enemyKilled(victim, this.world);
       }
       return;
     }
+
     if (victim instanceof Tank) {
       victim.explode(this.world);
+      this.waves.forget(victim);
       if (victim === this.player) {
         this.world.events.emit('playerDied', {});
-      } else if (killer === this.player) {
-        const reward = Math.round(victim.maxHealth * 2);
+        return;
+      }
+      if (byPlayer) {
+        const reward = victim.bossXp || Math.round(victim.maxHealth * 1.5);
         this.addXp(reward);
         this.score += reward;
+        this.perks.enemyKilled(victim, this.world);
       }
       return;
     }
+
     if (victim instanceof Projectile) {
-      // Projectiles clean up after themselves; nothing further to do here.
+      this.waves.forget(victim);
     }
   }
 
@@ -251,40 +411,14 @@ export class Run {
     );
   }
 
-  /** Keeps the arena stocked with something to shoot. */
-  private fillShapes(initial: boolean): void {
-    let count = 0;
-    for (const e of this.world.entities) if (e instanceof Shape) count++;
-    if (count >= this.targetShapeCount) return;
-    // Trickle them in so a cleared arena refills gradually rather than all at once.
-    const toSpawn = initial ? this.targetShapeCount - count : this.world.tick % 25 === 0 ? 1 : 0;
-    for (let i = 0; i < toSpawn; i++) this.spawnShape(initial);
+  /** Grants a level outright. Used by the in-development level key. */
+  debugGrantLevel(): void {
+    if (this.level >= MAX_LEVEL) return;
+    this.addXp(Math.max(1, xpForLevel(this.level + 1) - this.xp));
   }
 
-  private spawnShape(anywhere: boolean): void {
-    const kind = this.pickShapeKind();
-    const pos = anywhere ? this.randomInteriorPoint() : this.world.randomEdgePoint();
-    const shiny = this.shapeRng.bool(SHINY_CHANCE);
-    this.world.spawn(new Shape(kind, pos, this.shapeRng, shiny));
-  }
-
-  private pickShapeKind(): ShapeKind {
-    const roll = this.shapeRng.next();
-    if (roll < 0.58) return 'square';
-    if (roll < 0.85) return 'triangle';
-    if (roll < 0.95) return 'pentagon';
-    return this.shapeRng.bool(0.6) ? 'smallCrasher' : 'largeCrasher';
-  }
-
-  /** A point inside the arena, kept clear of the player so nothing lands on them. */
-  private randomInteriorPoint(): Vec2 {
-    const h = this.world.arena.halfSize - 120;
-    for (let attempt = 0; attempt < 12; attempt++) {
-      const p = vec(this.shapeRng.range(-h, h), this.shapeRng.range(-h, h));
-      const dx = p.x - this.player.pos.x;
-      const dy = p.y - this.player.pos.y;
-      if (dx * dx + dy * dy > 420 * 420) return p;
-    }
-    return this.world.randomEdgePoint();
+  /** Where the player is, for anything that needs to follow them. */
+  get focus(): Vec2 {
+    return this.player.pos;
   }
 }

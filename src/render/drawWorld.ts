@@ -1,5 +1,6 @@
 import type { Camera } from './camera.ts';
 import type { World, DeathEffect } from '../sim/world.ts';
+import type { WarningRing } from '../sim/waves.ts';
 import type { Entity } from '../sim/entity.ts';
 import { DEATH_TICKS, FLASH_TICKS } from '../sim/entity.ts';
 import { Tank } from '../sim/tank.ts';
@@ -31,6 +32,7 @@ export function drawWorld(
   alpha: number,
   width: number,
   height: number,
+  warnings: readonly WarningRing[] = [],
 ): void {
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, width, height);
@@ -40,6 +42,7 @@ export function drawWorld(
 
   drawGrid(ctx, camera);
   drawOutOfBounds(ctx, camera, world);
+  for (const warning of warnings) drawWarning(ctx, warning);
 
   // Ordered so the things you need to read sit on top of the things you do not.
   const traps: Entity[] = [];
@@ -78,6 +81,34 @@ export function drawWorld(
   for (const e of [...shapes, ...enemies, ...players]) drawHealthBar(ctx, e, alpha);
   for (const t of [...enemies, ...players]) drawName(ctx, t, alpha);
 
+  ctx.restore();
+}
+
+/**
+ * Marks where something is about to arrive.
+ *
+ * A closing ring rather than a static marker, so the moment it will land is
+ * readable at a glance and a wave never appears out of nowhere behind you.
+ */
+function drawWarning(ctx: CanvasRenderingContext2D, warning: WarningRing): void {
+  const { pos, radius, progress } = warning;
+  ctx.save();
+  ctx.translate(pos.x, pos.y);
+
+  ctx.globalAlpha = 0.25 + 0.35 * progress;
+  ctx.strokeStyle = COLORS.enemyRed;
+  ctx.lineWidth = Math.max(2, radius * 0.08);
+  ctx.setLineDash([radius * 0.35, radius * 0.25]);
+  ctx.beginPath();
+  ctx.arc(0, 0, radius, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // A second ring closes on the first, counting the spawn down.
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 0.5 * progress;
+  ctx.beginPath();
+  ctx.arc(0, 0, radius * (1.9 - progress * 0.9), 0, Math.PI * 2);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -250,7 +281,10 @@ function drawDeath(ctx: CanvasRenderingContext2D, d: DeathEffect, alpha: number)
 }
 
 function drawHealthBar(ctx: CanvasRenderingContext2D, e: Entity, alpha: number): void {
-  if (e.hideHealthBar || e.health >= e.maxHealth || !e.alive) return;
+  const isBoss = e instanceof Tank && e.isBoss;
+  if (e.hideHealthBar || !e.alive) return;
+  // A boss shows its bar from the first moment, so you can see what you are in for.
+  if (!isBoss && e.health >= e.maxHealth) return;
   const pos = lerpPos(e, alpha);
   const width = e.radius * 2;
   const height = Math.max(4, e.radius * 0.22);

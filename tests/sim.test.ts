@@ -24,6 +24,14 @@ import type { Intent } from '../src/core/input.ts';
 
 const makeRun = (): Run => new Run({ seed: 1234, difficulty: 'normal', color: '#00B2E1' });
 
+/** A run with the waves stopped, for tests about one mechanic at a time. */
+function quietRun(): Run {
+  const run = makeRun();
+  run.waves.halt();
+  for (const e of run.world.entities) if (e instanceof Shape) e.alive = false;
+  return run;
+}
+
 const intent = (over: Partial<Intent> = {}): Intent => ({
   move: vec(),
   aimAngle: 0,
@@ -203,9 +211,10 @@ test('bullets expire rather than leaving the arena', () => {
 
 // --- Damage and experience -------------------------------------------------
 
-test('two Basic shots kill a square, and the kill pays ten experience', () => {
+test('two Basic shots kill a square, and the kill pays what a square is worth', () => {
   const run = makeRun();
-  // Clear the ambient shapes so only the one under test can be hit.
+  // A still arena, so only the square under test can be hit or killed.
+  run.waves.halt();
   for (const e of run.world.entities) if (e instanceof Shape) e.alive = false;
   run.tick();
 
@@ -217,17 +226,17 @@ test('two Basic shots kill a square, and the kill pays ten experience', () => {
   const stats = deriveProjectileStats(emptyStats(), getTank('tank').barrels[0]!, 1);
   assert.equal(stats.damage, 7, 'a Basic bullet does seven damage');
 
-  const xpBefore = run.xp;
   advance(run, 60, intent({ fire: true }), 0);
 
   assert.equal(square.alive, false, 'the square should be destroyed');
-  assert.equal(run.xp - xpBefore, 10, 'a square is worth ten experience');
-  assert.equal(run.score, 10);
+  // Score is the raw value so runs stay comparable between difficulties, while
+  // experience carries the difficulty bonus that keeps the easy setting easy.
+  assert.equal(run.score, 10, 'a square is worth ten points');
+  assert.equal(run.xp, 10 * run.difficulty.xpBonus, 'and ten experience before the bonus');
 });
 
 test('a pentagon survives far longer than a square', () => {
-  const run = makeRun();
-  for (const e of run.world.entities) if (e instanceof Shape) e.alive = false;
+  const run = quietRun();
   run.tick();
   const pentagon = new Shape('pentagon', vec(300, 0), new Rng(9));
   run.world.spawn(pentagon);
