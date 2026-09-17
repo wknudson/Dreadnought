@@ -157,6 +157,11 @@ export class InputManager {
     this.touch.reset();
   }
 
+  /** Where the mouse is, in CSS pixels. Null until a mouse is seen. */
+  get pointerScreen(): Vec2 | null {
+    return this.usingMouse ? this.pointer : null;
+  }
+
   /** True once per Escape press. */
   consumePause(): boolean {
     const queued = this.pauseQueued;

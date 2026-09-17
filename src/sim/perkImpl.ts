@@ -387,6 +387,11 @@ export const PERKS: readonly PerkDefinition[] = [
   },
 ];
 
+const PERKS_BY_ID = new Map(PERKS.map((perk) => [perk.id, perk]));
+
+/** The card a taken perk came from, for anything that wants to name or explain it. */
+export const perkDefinition = (id: string): PerkDefinition | null => PERKS_BY_ID.get(id) ?? null;
+
 /** Multiplier on experience from the Fast Learner perk. */
 export const xpMultiplierFor = (stacks: number): number => 1 + stacks / 3;
 

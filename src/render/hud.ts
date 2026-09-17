@@ -4,6 +4,8 @@ import { COLORS } from '../data/colors.ts';
 import { levelProgress, MAX_LEVEL } from '../data/leveling.ts';
 import type { TouchSticks } from '../core/input.ts';
 import { STICK_RADIUS } from '../core/input.ts';
+import { perkDefinition, type PerkDefinition } from '../sim/perkImpl.ts';
+import type { Vec2 } from '../core/math.ts';
 
 const FONT = 'Ubuntu, system-ui, sans-serif';
 
@@ -76,6 +78,8 @@ export function drawHud(
   state: HudState,
   width: number,
   height: number,
+  /** The mouse, in CSS pixels, for the perk list to test against. */
+  pointer: Vec2 | null = null,
 ): void {
   const barWidth = Math.min(460, width * 0.52);
   const x = (width - barWidth) / 2;
@@ -103,7 +107,7 @@ export function drawHud(
   );
 
   drawWaveStatus(ctx, run, width, scale);
-  drawPerks(ctx, run, height, scale);
+  drawPerks(ctx, run, width, height, scale, pointer);
   drawMinimap(ctx, run, width, height, scale);
   drawBanner(ctx, state, width, height, scale);
 }
@@ -212,12 +216,26 @@ function drawWaveStatus(
   }
 }
 
-/** The perks collected so far, stacked up the left edge. */
+/** Where the perk list starts, from the left edge. */
+const PERK_X = 14;
+
+/** The card colours, so a perk reads the same in the list as it did in the hand. */
+const rarityColor = (rarity: PerkDefinition['rarity']): string =>
+  rarity === 'rare' ? '#F9C846' : '#7FD1F5';
+
+/**
+ * The perks collected so far, stacked up the left edge.
+ *
+ * Hovering one explains it. The list is the only place a perk you took twenty
+ * waves ago is still named, and the name alone does not say what it does.
+ */
 function drawPerks(
   ctx: CanvasRenderingContext2D,
   run: Run,
+  width: number,
   height: number,
   scale: number,
+  pointer: Vec2 | null,
 ): void {
   const perks = run.perkSummary();
   if (!perks.length) return;
@@ -226,16 +244,136 @@ function drawPerks(
   ctx.font = `700 ${size}px ${FONT}`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'bottom';
-  perks.forEach((perk, i) => {
-    const label = perk.stacks > 1 ? `${perkName(perk.id)} x${perk.stacks}` : perkName(perk.id);
-    const y = height - 90 * scale - i * (size + 5);
+
+  const rows = perks.map((perk, i) => {
+    const def = perkDefinition(perk.id);
+    const name = def?.name ?? perkName(perk.id);
+    const label = perk.stacks > 1 ? `${name} x${perk.stacks}` : name;
+    return {
+      def,
+      stacks: perk.stacks,
+      label,
+      bottom: height - 90 * scale - i * (size + 5),
+      textWidth: ctx.measureText(label).width,
+    };
+  });
+
+  // The hit box is the label itself with a little slack. Kept tight on purpose:
+  // the pointer is also the crosshair, and aiming past the corner should not
+  // keep throwing a panel onto the screen.
+  const hovered =
+    pointer &&
+    rows.find(
+      (row) =>
+        pointer.x >= PERK_X - 4 &&
+        pointer.x <= PERK_X + row.textWidth + 6 &&
+        pointer.y >= row.bottom - size - 2 &&
+        pointer.y <= row.bottom + 3,
+    );
+
+  for (const row of rows) {
     ctx.lineWidth = size * 0.3;
     ctx.lineJoin = 'round';
     ctx.strokeStyle = '#000000';
-    ctx.strokeText(label, 14, y);
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillText(label, 14, y);
-  });
+    ctx.strokeText(row.label, PERK_X, row.bottom);
+    ctx.fillStyle = row === hovered && row.def ? rarityColor(row.def.rarity) : '#FFFFFF';
+    ctx.fillText(row.label, PERK_X, row.bottom);
+  }
+
+  if (hovered?.def) {
+    // Beside the list rather than over it, so the other perks stay readable.
+    const listWidth = Math.max(...rows.map((row) => row.textWidth));
+    drawPerkTooltip(
+      ctx,
+      hovered.def,
+      hovered.stacks,
+      PERK_X + listWidth + 14,
+      hovered.bottom - size / 2,
+      width,
+      height,
+      scale,
+    );
+  }
+  ctx.restore();
+}
+
+/** Breaks a description into lines that fit the given width. */
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const lines: string[] = [];
+  let line = '';
+  for (const word of text.split(' ')) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && ctx.measureText(next).width > maxWidth) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+/** The panel explaining the perk under the pointer. */
+function drawPerkTooltip(
+  ctx: CanvasRenderingContext2D,
+  def: PerkDefinition,
+  stacks: number,
+  preferredX: number,
+  rowMiddle: number,
+  width: number,
+  height: number,
+  scale: number,
+): void {
+  const pad = 10 * scale;
+  const titleSize = 14 * scale;
+  const bodySize = 12.5 * scale;
+  const lineHeight = bodySize * 1.35;
+  // A window too narrow to fit the panel beside the list gets it over the list
+  // instead, which is worse than the tooltip being readable.
+  const panelWidth = Math.min(300 * scale, Math.max(150, width - PERK_X * 2));
+  const x = Math.max(PERK_X, Math.min(preferredX, width - panelWidth - PERK_X));
+
+  ctx.font = `400 ${bodySize}px ${FONT}`;
+  const lines = wrapText(ctx, def.description, panelWidth - pad * 2);
+  const footer = def.maxStacks > 1 ? `${stacks} of ${def.maxStacks} taken` : null;
+
+  const panelHeight =
+    pad * 2 + titleSize + lineHeight * lines.length + (footer ? lineHeight : 0) + 4 * scale;
+  // Centred on the row it belongs to, nudged back on screen at either end.
+  const y = Math.max(12, Math.min(rowMiddle - panelHeight / 2, height - panelHeight - 12));
+
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  ctx.fillStyle = '#1B1B1B';
+  ctx.strokeStyle = rarityColor(def.rarity);
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(x, y, panelWidth, panelHeight, 6 * scale);
+  ctx.fill();
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  let cursor = y + pad;
+
+  ctx.font = `700 ${titleSize}px ${FONT}`;
+  ctx.fillStyle = rarityColor(def.rarity);
+  ctx.fillText(stacks > 1 ? `${def.name} x${stacks}` : def.name, x + pad, cursor);
+  cursor += titleSize + 4 * scale;
+
+  ctx.font = `400 ${bodySize}px ${FONT}`;
+  ctx.fillStyle = '#FFFFFF';
+  for (const line of lines) {
+    ctx.fillText(line, x + pad, cursor);
+    cursor += lineHeight;
+  }
+
+  if (footer) {
+    ctx.fillStyle = '#9A9A9A';
+    ctx.fillText(footer, x + pad, cursor);
+  }
   ctx.restore();
 }
 

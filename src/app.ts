@@ -474,7 +474,8 @@ export class App {
       this.height,
       run.warnings,
     );
-    drawHud(ctx, run, this.hud, this.width, this.height);
+    // No pointer while an overlay is up: the perk list is behind it.
+    drawHud(ctx, run, this.hud, this.width, this.height, this.overlay ? null : this.input.pointerScreen);
     if (this.input.touchAvailable && !this.input.usingMouse) {
       drawTouchSticks(ctx, this.input.touch);
     }
