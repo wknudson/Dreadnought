@@ -100,6 +100,10 @@ export class Run implements PerkHost {
 
     this.player = new Tank(getTank(ROOT_TANK_ID), 1, this.control, options.color);
     this.player.team = 'player';
+    // The two perk hooks that fire inside the simulation rather than from an
+    // event: one on every shot built, one on every stat refresh.
+    this.player.shotModifier = (stats, mods) => this.perks.modifyProjectile(stats, mods);
+    this.player.statModifier = (stats) => this.perks.modifyStats(stats);
     this.player.name = options.playerName ?? '';
     this.world.spawn(this.player);
 

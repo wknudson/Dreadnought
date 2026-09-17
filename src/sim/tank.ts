@@ -83,6 +83,14 @@ export class Tank extends Entity implements BarrelOwner, DroneCommander {
 
   contactDamage = 0;
 
+  /**
+   * Perk adjustments to the derived stats, installed by the run for the player.
+   *
+   * Applied on every refresh rather than once, because the derived block is
+   * rebuilt from the points each time and would otherwise drop them.
+   */
+  statModifier: ((stats: DerivedTankStats) => void) | null = null;
+
   constructor(def: TankDefinition, level: number, controller: Controller, color: string) {
     super();
     this.def = def;
@@ -146,6 +154,7 @@ export class Tank extends Entity implements BarrelOwner, DroneCommander {
   /** Recomputes everything that depends on level, points or definition. */
   refresh(): void {
     this.derived = deriveTankStats(this.def, this.level, this.points, this.isSpike);
+    this.statModifier?.(this.derived);
     const healthFraction = this.maxHealth > 0 ? this.health / this.maxHealth : 1;
     this.maxHealth = this.derived.maxHealth;
     this.health = Math.min(this.maxHealth, this.maxHealth * healthFraction);

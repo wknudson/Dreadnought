@@ -18,6 +18,8 @@ import { getTank } from '../src/data/tanks.ts';
 import { TANKS } from '../src/data/tanks.ts';
 import { XP_TABLE, MAX_LEVEL, CARD_LEVELS, bodyRadius } from '../src/data/leveling.ts';
 import { emptyStats, deriveProjectileStats, barrelReloadTicks } from '../src/sim/stats.ts';
+import { PERKS } from '../src/sim/perkImpl.ts';
+import { statReadouts } from '../src/render/statColumn.ts';
 import { vec } from '../src/core/math.ts';
 import { Rng } from '../src/core/rng.ts';
 import type { Intent } from '../src/core/input.ts';
@@ -399,3 +401,67 @@ test('the level key advances exactly one level', () => {
   for (let i = 0; i < 60; i++) run.debugGrantLevel();
   assert.equal(run.level, MAX_LEVEL, 'and stops at the cap');
 });
+
+
+// --- Perks reaching the simulation -----------------------------------------
+
+/**
+ * The shot a tank fires with these perks taken.
+ *
+ * Perks hook the simulation in two places that no event passes through: the
+ * stats a projectile is built with, and the stats a tank derives. Both were
+ * unreachable once, and nothing above would have noticed.
+ */
+function firstShot(perkIds: string[]): Bullet {
+  const run = quietRun();
+  for (const id of perkIds) {
+    const perk = PERKS.find((p) => p.id === id);
+    if (!perk) throw new Error(`no perk called ${id}`);
+    run.takeCard({ kind: 'perk', perk });
+  }
+  advance(run, 3, intent({ fire: true }));
+  const bullet = bulletsIn(run)[0];
+  assert.ok(bullet, 'the tank fired something');
+  return bullet;
+}
+
+test('a bullet perk reaches the shot it modifies', () => {
+  const plain = firstShot([]);
+  const buffed = firstShot(['heavy-rounds', 'pierce', 'homing', 'ricochet']);
+
+  assert.equal(buffed.contactDamage, plain.contactDamage * 1.25, 'Heavy Rounds hits harder');
+  assert.equal(buffed.maxHealth, plain.maxHealth * 1.5, 'Piercing Rounds survives longer');
+  assert.ok(buffed.mods.homing > 0, 'Seeking Rounds steers');
+  assert.equal(buffed.mods.bounces, 1, 'Ricochet bounces once');
+  assert.equal(buffed.mods.pierce, 1, 'and one enemy may be passed through');
+});
+
+test('a piercing charge carries a shot through a killing blow', () => {
+  const shot = firstShot(['pierce']);
+  const full = shot.maxHealth;
+
+  assert.equal(shot.damage(full * 4), false, 'the charge is spent instead of the shot');
+  assert.ok(shot.alive);
+  assert.equal(shot.mods.pierce, 0);
+  assert.equal(shot.health, full, 'and it leaves the enemy whole');
+
+  assert.equal(shot.damage(full * 4), true, 'with no charges left it breaks up');
+  assert.equal(shot.alive, false);
+});
+
+test('a stat perk reaches the tank it belongs to', () => {
+  const run = quietRun();
+  const before = run.player.maxHealth;
+  run.perks.add({
+    id: 'test-plating',
+    stacks: 1,
+    modifyStats: (stats) => {
+      stats.maxHealth *= 2;
+    },
+  });
+
+  run.player.refresh();
+  assert.equal(run.player.maxHealth, before * 2);
+});
+
+

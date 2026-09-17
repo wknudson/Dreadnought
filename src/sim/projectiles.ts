@@ -99,6 +99,23 @@ export abstract class Projectile extends Entity {
   }
 
   /**
+   * Spends a piercing charge rather than breaking up.
+   *
+   * Penetration is otherwise a health pool, and a health pool cannot express
+   * "carries through one more enemy": a shape deals its body damage on every
+   * tick the two overlap, so the shot that survives a big hit is the one that
+   * happened to be moving fast enough. A charge makes the promise literal.
+   */
+  override damage(amount: number): boolean {
+    const died = super.damage(amount);
+    if (!died || this.mods.pierce <= 0) return died;
+    this.mods.pierce--;
+    this.alive = true;
+    this.health = this.maxHealth;
+    return false;
+  }
+
+  /**
    * Cleans up however the projectile died.
    *
    * A drone shot down by an enemy and one that simply timed out both land here,
@@ -620,6 +637,10 @@ setProjectileFactory((world, owner, barrel, spawn, angle) => {
   const def = barrel.def.projectile;
   const stats = deriveProjectileStats(owner.stats(), barrel.def, owner.scale());
   const source = owner.entity;
+  // Perks get their say before anything is built, since a projectile reads its
+  // stats once in the constructor and never again.
+  const mods = noMods();
+  source.rootOwner().shotModifier?.(stats, mods);
   const commander = commanderOf(owner as MaybeCommander);
   const color = (source as Entity & { color?: string }).color ?? '#00B2E1';
 
@@ -677,6 +698,7 @@ setProjectileFactory((world, owner, barrel, spawn, angle) => {
 
   projectile.team = source.team;
   projectile.owner = source;
+  projectile.mods = mods;
   projectile.pushFactor = projectilePush(owner.stats(), barrel.def);
   projectile.deathColor = color;
   world.spawn(projectile);
@@ -703,9 +725,12 @@ export function raiseNecroDrone(
   if (cap !== undefined && barrel.liveCount >= cap) return null;
 
   const stats = deriveProjectileStats(ownerStats, barrel.def, ownerScale);
+  const mods = noMods();
+  owner.rootOwner().shotModifier?.(stats, mods);
   const drone = new NecroDrone(at, world.rng.angle(), stats, barrel, commander);
   drone.team = owner.team;
   drone.owner = owner;
+  drone.mods = mods;
   drone.deathColor = color;
   barrel.liveCount++;
   world.spawn(drone);

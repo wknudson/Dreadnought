@@ -1,9 +1,14 @@
 import { type Vec2, vec } from '../core/math.ts';
 import type { World } from './world.ts';
+import type { ProjectileStats } from './stats.ts';
+import type { ProjectileMods } from './projectiles.ts';
 
 export type Team = 'player' | 'enemy' | 'neutral';
 
 export type EntityKind = 'tank' | 'shape' | 'projectile' | 'pickup';
+
+/** Adjusts a shot as it is created. The run installs one on the player's tank. */
+export type ShotModifier = (stats: ProjectileStats, mods: ProjectileMods) => void;
 
 /** Ticks a hit tint lasts. */
 export const FLASH_TICKS = 3;
@@ -64,6 +69,15 @@ export abstract class Entity {
 
   /** Who owns this entity for the purpose of crediting a kill. */
   owner: Entity | null = null;
+
+  /**
+   * Adjusts every shot this entity is ultimately responsible for.
+   *
+   * Read through `rootOwner` when a projectile is built, so a minion's shots and
+   * a missile's shots carry the same perks as the tank that launched them. Null
+   * on everything without perks, which is everything but the player.
+   */
+  shotModifier: ShotModifier | null = null;
 
   /** True when this entity should not be drawn with a health bar. */
   hideHealthBar = false;
