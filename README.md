@@ -48,6 +48,10 @@ Right click or shift is the secondary action, which steers drones on the tanks
 that have them. E holds the trigger down, C spins you, Escape pauses. On a phone
 the left thumb drives and the right thumb aims and fires.
 
+The bottom left corner carries your eight stats: how many points each has, what
+that currently buys, and how much of it the run has added. The perks you have
+taken stack above them, and hovering one explains what it does.
+
 A run is twenty-five waves with a boss every fifth. Levelling deals a choice of
 three cards, and at levels 15, 30 and 45 you pick a class from the real upgrade
 tree. Dying ends the run; only the best wave and score survive it.

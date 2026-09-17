@@ -465,3 +465,48 @@ test('a stat perk reaches the tank it belongs to', () => {
 });
 
 
+// --- The stat column -------------------------------------------------------
+
+const readout = (run: Run, key: string) => {
+  const row = statReadouts(run.player).find((r) => r.key === key);
+  assert.ok(row, `the column lists ${key}`);
+  return row;
+};
+
+test('the stat column reports what the points actually bought', () => {
+  const run = quietRun();
+  const fresh = readout(run, 'bulletDamage');
+  assert.equal(fresh.points, 0);
+  assert.equal(fresh.gainFraction, 0, 'nothing spent is nothing gained');
+
+  // Bullet damage is 7 + 3 a point, so three points is sixteen.
+  run.player.points.bulletDamage = 3;
+  run.player.refresh();
+  const spent = readout(run, 'bulletDamage');
+  assert.equal(spent.points, 3);
+  assert.ok(Math.abs(spent.gainFraction - (16 / 7 - 1)) < 1e-9, 'and the gain says so');
+});
+
+test('the stat column counts perks as well as points', () => {
+  const run = quietRun();
+  const perk = PERKS.find((p) => p.id === 'heavy-rounds');
+  assert.ok(perk);
+  run.takeCard({ kind: 'perk', perk });
+
+  // A quarter more damage, bought with no points at all.
+  assert.ok(Math.abs(readout(run, 'bulletDamage').gainFraction - 0.25) < 1e-9);
+  assert.equal(readout(run, 'bulletDamage').points, 0);
+});
+
+test('the stat column drops the stats a tank does not have', () => {
+  const run = quietRun();
+  assert.equal(statReadouts(run.player).length, 8);
+
+  // The Smasher line trades every gun for a shell, and its four bullet stats
+  // with them. Listing stats that cannot be raised would be a lie.
+  run.upgradeTo('smasher');
+  const keys = statReadouts(run.player).map((r) => r.key);
+  assert.equal(keys.length, 4);
+  assert.ok(!keys.includes('bulletDamage'));
+  assert.ok(keys.includes('bodyDamage'));
+});

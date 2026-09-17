@@ -5,6 +5,7 @@ import { levelProgress, MAX_LEVEL } from '../data/leveling.ts';
 import type { TouchSticks } from '../core/input.ts';
 import { STICK_RADIUS } from '../core/input.ts';
 import { perkDefinition, type PerkDefinition } from '../sim/perkImpl.ts';
+import { drawStatColumn } from './statColumn.ts';
 import type { Vec2 } from '../core/math.ts';
 
 const FONT = 'Ubuntu, system-ui, sans-serif';
@@ -107,7 +108,9 @@ export function drawHud(
   );
 
   drawWaveStatus(ctx, run, width, scale);
-  drawPerks(ctx, run, width, height, scale, pointer);
+  // The perk list stacks on top of the stat column, which owns the corner.
+  const perkBase = drawStatColumn(ctx, run.player, width, height, scale) - 12 * scale;
+  drawPerks(ctx, run, width, height, perkBase, scale, pointer);
   drawMinimap(ctx, run, width, height, scale);
   drawBanner(ctx, state, width, height, scale);
 }
@@ -233,7 +236,9 @@ function drawPerks(
   ctx: CanvasRenderingContext2D,
   run: Run,
   width: number,
-  height: number,
+  screenHeight: number,
+  /** The y of the lowest row, which is wherever the stat column ends. */
+  baseY: number,
   scale: number,
   pointer: Vec2 | null,
 ): void {
@@ -253,7 +258,7 @@ function drawPerks(
       def,
       stacks: perk.stacks,
       label,
-      bottom: height - 90 * scale - i * (size + 5),
+      bottom: baseY - i * (size + 5),
       textWidth: ctx.measureText(label).width,
     };
   });
@@ -290,7 +295,7 @@ function drawPerks(
       PERK_X + listWidth + 14,
       hovered.bottom - size / 2,
       width,
-      height,
+      screenHeight,
       scale,
     );
   }

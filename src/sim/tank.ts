@@ -124,7 +124,8 @@ export class Tank extends Entity implements BarrelOwner, DroneCommander {
     }
   }
 
-  private get isSpike(): boolean {
+  /** Spike rams harder than the rest of the Smasher line. Read by the stat readout too. */
+  get isSpike(): boolean {
     return this.def.id === 'spike';
   }
 

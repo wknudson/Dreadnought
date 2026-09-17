@@ -40,6 +40,18 @@ export const STAT_LABELS: Readonly<Record<StatKey, string>> = {
   moveSpeed: 'Movement Speed',
 };
 
+/** The same names with the qualifier dropped, for the corner column on a phone. */
+export const SHORT_STAT_LABELS: Readonly<Record<StatKey, string>> = {
+  regen: 'Regen',
+  maxHealth: 'Health',
+  bodyDamage: 'Body',
+  bulletSpeed: 'Speed',
+  bulletPen: 'Pen',
+  bulletDamage: 'Damage',
+  reload: 'Reload',
+  moveSpeed: 'Move',
+};
+
 /** What a barrel emits. Each kind has its own entity behaviour in sim/projectiles.ts. */
 export type ProjectileKind =
   | 'bullet'
