@@ -11,6 +11,7 @@ import {
   bossThreatForWave,
   bossXpForWave,
   enemyLevel,
+  ENEMY_LEVEL_SPREAD,
   generateWave,
   isBossWave,
   FINAL_WAVE,
@@ -281,10 +282,11 @@ export class WaveDirector {
   }
 
   /** Picks a tank of the given tier and drops it in as an enemy. */
-  private spawnAiTank(tier: 2 | 3 | 4, at: Vec2): void {
+  private spawnAiTank(tier: 1 | 2 | 3 | 4, at: Vec2): void {
     const candidates = TANKS.filter((t) => t.tier === tier && t.barrels.length > 0);
     const def = this.rng.pick(candidates.length ? candidates : [getTank('twin')]);
-    const level = enemyLevel(this.wave, tier);
+    const jitter = this.rng.int(-ENEMY_LEVEL_SPREAD, ENEMY_LEVEL_SPREAD);
+    const level = enemyLevel(this.playerLevel, tier, jitter);
     const archetype = archetypeFor(def);
     const controller = new AiTankController(archetype, this.rng.fork(`ai:${this.wave}:${def.id}`));
 

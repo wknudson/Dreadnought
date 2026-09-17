@@ -3,7 +3,9 @@ import type { ShapeKind } from './shapes.ts';
 import type { DifficultyId } from '../core/storage.ts';
 import type { BossId } from './bosses.ts';
 import { BOSS_ORDER } from './bosses.ts';
+import { MAX_LEVEL } from './leveling.ts';
 import { DEFAULT_ARENA_HALF_SIZE } from '../sim/world.ts';
+import { TICKS_PER_SECOND } from '../core/loop.ts';
 
 /** How hard the run pushes back. */
 export interface Difficulty {
@@ -47,7 +49,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, Difficulty>> = {
 /** One kind of thing a wave can spend its budget on. */
 export interface EnemyOption {
   /** A polygon, or an AI tank of the given tier. */
-  kind: { type: 'shape'; shape: ShapeKind } | { type: 'tank'; tier: 2 | 3 | 4 };
+  kind: { type: 'shape'; shape: ShapeKind } | { type: 'tank'; tier: 1 | 2 | 3 | 4 };
   /** What one costs against the wave budget. */
   cost: number;
   /** The first wave this may appear on. */
@@ -61,8 +63,19 @@ export interface EnemyOption {
  *
  * Costs are relative to a square, and roughly track how much trouble each one
  * is. The unlock waves are what shape the opening: the first few are squares
- * and triangles, crashers arrive to break up camping, and enemy tanks only turn
- * up once the player has had a chance to pick a class.
+ * and triangles, crashers arrive to break up camping, and the first enemy tank
+ * arrives at wave four.
+ *
+ * That first one is deliberately a Basic Tank, the same thing the player is
+ * still driving. A classed tank cannot exist below level fifteen, so fielding
+ * one at wave four means fielding something the player is not yet allowed to
+ * be, and the harness loses a quarter of its runs on that wave alone. A mirror
+ * match is a fair introduction; the classes follow once the player has one.
+ *
+ * Tanks are weighted heavily against the polygons, because an enemy tank is the
+ * only opponent that shoots back and a wave without one is a farming trip. The
+ * polygons still outnumber them several to one: they cost a fraction as much,
+ * and they are what the experience economy is built on.
  */
 export const ENEMY_OPTIONS: readonly EnemyOption[] = [
   { kind: { type: 'shape', shape: 'square' }, cost: 1, unlockWave: 1, weight: 10 },
@@ -70,11 +83,15 @@ export const ENEMY_OPTIONS: readonly EnemyOption[] = [
   { kind: { type: 'shape', shape: 'smallCrasher' }, cost: 2, unlockWave: 3, weight: 6 },
   { kind: { type: 'shape', shape: 'largeCrasher' }, cost: 3, unlockWave: 4, weight: 5 },
   { kind: { type: 'shape', shape: 'pentagon' }, cost: 5, unlockWave: 4, weight: 4 },
-  { kind: { type: 'tank', tier: 2 }, cost: 12, unlockWave: 6, weight: 5 },
-  { kind: { type: 'tank', tier: 3 }, cost: 22, unlockWave: 10, weight: 4 },
+  { kind: { type: 'tank', tier: 1 }, cost: 4, unlockWave: 4, weight: 8 },
+  { kind: { type: 'tank', tier: 2 }, cost: 7, unlockWave: 7, weight: 16 },
+  { kind: { type: 'tank', tier: 3 }, cost: 12, unlockWave: 9, weight: 12 },
   { kind: { type: 'shape', shape: 'alphaPentagon' }, cost: 25, unlockWave: 12, weight: 2 },
-  { kind: { type: 'tank', tier: 4 }, cost: 40, unlockWave: 16, weight: 3 },
+  { kind: { type: 'tank', tier: 4 }, cost: 20, unlockWave: 14, weight: 8 },
 ];
+
+/** Whether an option fields an AI tank rather than a polygon. */
+const isTankOption = (o: EnemyOption): boolean => o.kind.type === 'tank';
 
 /** A boss arrives every this many waves. */
 export const BOSS_INTERVAL = 5;
@@ -158,11 +175,33 @@ export const bossXpForWave = (wave: number): number => 1200 + 240 * wave;
 export const bossThreatForWave = (wave: number, playerLevel: number): number =>
   Math.min(1.3, 0.3 + 0.02 * wave + playerLevel / 70);
 
-/** The level an AI tank of this tier spawns at on this wave. */
-export function enemyLevel(wave: number, tier: number): number {
-  const base = Math.min(45, 4 + 2 * wave);
+/**
+ * How many AI tanks one wave may field.
+ *
+ * Without a cap the budget alone decides it, and the wave the first tank unlocks
+ * on can already afford three of them against a player who has not picked a
+ * class yet. That wave is not difficult, it is a wall. The cap opens at one and
+ * widens at the pace the player's own firepower does.
+ */
+export const tankLimitForWave = (wave: number): number =>
+  Math.min(6, 1 + Math.floor(Math.max(0, wave - 4) / 3));
+
+/** How far above or below the player an AI tank may spawn. */
+export const ENEMY_LEVEL_SPREAD = 2;
+
+/**
+ * The level an AI tank of this tier spawns at.
+ *
+ * Measured against the player rather than the wave number, because the two come
+ * apart badly: a player who farms well is ten levels ahead of the wave by the
+ * midgame, and an enemy tank that far behind is a moving polygon. Matching the
+ * player keeps every tank fight a fair one however the run has gone, and the
+ * jitter is there so a wave of three is not three identical tanks.
+ */
+export function enemyLevel(playerLevel: number, tier: number, jitter = 0): number {
+  const level = playerLevel + jitter;
   // A higher-tier tank has to be at least high enough level to exist.
-  return Math.max(base, (tier - 1) * 15);
+  return Math.max(Math.min(MAX_LEVEL, level), (tier - 1) * 15);
 }
 
 /**
@@ -181,18 +220,48 @@ export function generateWave(index: number, difficulty: Difficulty, rng: Rng): W
   const groups: SpawnGroup[] = [];
   const counts = new Map<EnemyOption, number>();
 
+  // Buy one tank up front, so no wave past the unlock is polygons only. Weights
+  // alone leave the occasional wave with nothing that shoots back, and that wave
+  // reads as the game having forgotten about you.
+  //
+  // A boss wave is the exception and its allowance is one short: the boss is
+  // already the thing that shoots back, and a level-matched escort on top of the
+  // first one is what turns wave five from a fight into a funeral.
+  const tankLimit = tankLimitForWave(index) - (boss ? 1 : 0);
+  let tanksBought = 0;
+  const tanks = tankLimit > 0 ? available.filter(isTankOption) : [];
+  if (tanks.length) {
+    const opener = rng.weighted(tanks, (o) => o.weight);
+    budget -= opener.cost;
+    counts.set(opener, 1);
+    tanksBought = 1;
+  }
+
   let guard = 0;
   while (budget >= 1 && available.length && guard++ < 200) {
-    const affordable = available.filter((o) => o.cost <= budget);
+    const affordable = available.filter(
+      (o) => o.cost <= budget && (!isTankOption(o) || tanksBought < tankLimit),
+    );
     if (!affordable.length) break;
     const pick = rng.weighted(affordable, (o) => o.weight);
     budget -= pick.cost;
     counts.set(pick, (counts.get(pick) ?? 0) + 1);
+    if (isTankOption(pick)) tanksBought++;
   }
 
   // Everything of one kind arrives together, in a trickle rather than at once.
+  // Polygons lead and the tanks follow a beat behind, so a wave opens with
+  // something to farm rather than with the hardest thing in it on the doorstep.
+  const ordered = [...counts].sort(
+    ([a], [b]) => Number(isTankOption(a)) - Number(isTankOption(b)),
+  );
   let delay = 0;
-  for (const [entry, count] of counts) {
+  let announced = false;
+  for (const [entry, count] of ordered) {
+    if (isTankOption(entry) && !announced) {
+      announced = true;
+      if (delay > 0) delay += rng.int(TICKS_PER_SECOND * 2, TICKS_PER_SECOND * 5);
+    }
     groups.push({ entry, count, delayTicks: delay });
     delay += rng.int(10, 40);
   }

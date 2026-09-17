@@ -17,12 +17,16 @@ import { TICKS_PER_SECOND } from '../src/core/loop.ts';
 import {
   BOSS_INTERVAL,
   DIFFICULTIES,
+  ENEMY_LEVEL_SPREAD,
+  ENEMY_OPTIONS,
   FINAL_WAVE,
   arenaSizeForWave,
   bossFor,
   budgetForWave,
+  enemyLevel,
   generateWave,
   isBossWave,
+  tankLimitForWave,
 } from '../src/data/waves.ts';
 import { BOSS_ORDER, getBoss } from '../src/data/bosses.ts';
 import { dealCards, HAND_SIZE } from '../src/data/cards.ts';
@@ -104,12 +108,54 @@ test('waves grow, and a boss wave brings a lighter escort', () => {
 
 test('a wave only fields what has been unlocked by then', () => {
   const rng = new Rng(3);
-  for (let wave = 1; wave <= 4; wave++) {
+  for (let wave = 1; wave <= FINAL_WAVE; wave++) {
     const def = generateWave(wave, DIFFICULTIES.normal, rng);
     for (const group of def.groups) {
-      assert.notEqual(group.entry.kind.type, 'tank', `wave ${wave} should have no enemy tanks`);
+      assert.ok(
+        wave >= group.entry.unlockWave,
+        `wave ${wave} fielded something unlocked at ${group.entry.unlockWave}`,
+      );
     }
   }
+});
+
+test('every wave past the unlock brings something that shoots back', () => {
+  const firstTankWave = Math.min(
+    ...ENEMY_OPTIONS.filter((o) => o.kind.type === 'tank').map((o) => o.unlockWave),
+  );
+  for (let seed = 1; seed <= 8; seed++) {
+    const rng = new Rng(seed);
+    for (let wave = 1; wave <= FINAL_WAVE; wave++) {
+      const def = generateWave(wave, DIFFICULTIES.normal, rng);
+      const tanks = def.groups
+        .filter((g) => g.entry.kind.type === 'tank')
+        .reduce((n, g) => n + g.count, 0);
+      if (wave < firstTankWave) {
+        assert.equal(tanks, 0, `wave ${wave} should predate enemy tanks`);
+      } else if (!def.boss) {
+        assert.ok(tanks > 0, `wave ${wave} on seed ${seed} had no enemy tank`);
+      }
+      assert.ok(
+        tanks <= tankLimitForWave(wave),
+        `wave ${wave} fielded ${tanks} tanks, over its cap of ${tankLimitForWave(wave)}`,
+      );
+    }
+  }
+});
+
+test("an enemy tank spawns at the player's level, not the wave's", () => {
+  for (const level of [10, 20, 30, 45]) {
+    for (let jitter = -ENEMY_LEVEL_SPREAD; jitter <= ENEMY_LEVEL_SPREAD; jitter++) {
+      const got = enemyLevel(level, 2, jitter);
+      assert.ok(
+        Math.abs(got - level) <= ENEMY_LEVEL_SPREAD || got === 15,
+        `a tier two tank against level ${level} spawned at ${got}`,
+      );
+      assert.ok(got <= 45, 'no enemy exceeds the level cap');
+    }
+  }
+  // A tier four tank cannot exist below the level its class unlocks at.
+  assert.equal(enemyLevel(20, 4, 0), 45);
 });
 
 test('the arena widens as the run goes on', () => {
