@@ -385,6 +385,7 @@ export class Missile extends Projectile implements BarrelOwner {
   private readonly spinRate: number;
   private readonly startupDelay: number;
   private readonly ownerStats: () => StatBlock;
+  private readonly ownerReload: () => number;
   private readonly ownerScale: number;
   /** Reverses the spin, which is Skimmer's right-click. */
   private readonly commander: DroneCommander | null;
@@ -400,6 +401,7 @@ export class Missile extends Projectile implements BarrelOwner {
       spinRate: number;
       startupDelay: number;
       stats: () => StatBlock;
+      reloadScale: () => number;
       scale: number;
       commander: DroneCommander | null;
     },
@@ -410,6 +412,7 @@ export class Missile extends Projectile implements BarrelOwner {
     this.spinRate = options.spinRate;
     this.startupDelay = options.startupDelay;
     this.ownerStats = options.stats;
+    this.ownerReload = options.reloadScale;
     this.ownerScale = options.scale;
     this.commander = options.commander;
     this.vel = vec(Math.cos(angle) * stats.initialSpeed, Math.sin(angle) * stats.initialSpeed);
@@ -422,6 +425,10 @@ export class Missile extends Projectile implements BarrelOwner {
 
   stats(): StatBlock {
     return this.ownerStats();
+  }
+
+  reloadScale(): number {
+    return this.ownerReload();
   }
 
   /** The missile's own size drives its barrels, so they shrink with it. */
@@ -467,6 +474,7 @@ export class Minion extends Projectile implements BarrelOwner {
   private readonly cruise: number;
   private readonly host: BarrelHost;
   private readonly ownerStats: () => StatBlock;
+  private readonly ownerReload: () => number;
   private readonly commander: DroneCommander | null;
 
   /** Squared distance the minions try to hold from the cursor. */
@@ -479,12 +487,14 @@ export class Minion extends Projectile implements BarrelOwner {
     spawner: BarrelState | null,
     barrels: readonly BarrelDefinition[],
     ownerStats: () => StatBlock,
+    ownerReloadScale: () => number,
     commander: DroneCommander | null,
   ) {
     super(pos, angle, stats, 'minion', spawner);
     this.cruise = stats.acceleration;
     this.host = new BarrelHost(barrels);
     this.ownerStats = ownerStats;
+    this.ownerReload = ownerReloadScale;
     this.commander = commander;
     this.pushFactor = 4;
     const launch = stats.initialSpeed / 3;
@@ -498,6 +508,10 @@ export class Minion extends Projectile implements BarrelOwner {
 
   stats(): StatBlock {
     return this.ownerStats();
+  }
+
+  reloadScale(): number {
+    return this.ownerReload();
   }
 
   scale(): number {
@@ -675,6 +689,7 @@ setProjectileFactory((world, owner, barrel, spawn, angle) => {
         barrel,
         def.barrels ?? [],
         () => owner.stats(),
+        () => owner.reloadScale(),
         commander,
       );
       break;
@@ -686,6 +701,7 @@ setProjectileFactory((world, owner, barrel, spawn, angle) => {
         spinRate: def.spinRate ?? 0,
         startupDelay: def.startupDelay ?? 0,
         stats: () => owner.stats(),
+        reloadScale: () => owner.reloadScale(),
         scale: owner.scale(),
         commander,
       });

@@ -18,6 +18,8 @@ export interface BarrelOwner {
   stats(): StatBlock;
   /** Body size relative to a level-1 tank, scaling barrels and projectiles alike. */
   scale(): number;
+  /** What this owner's perks multiply its reload period by. One for anything without. */
+  reloadScale(): number;
   /** Where a spawned projectile should point when it is not simply the barrel angle. */
   aimAngle(): number;
 }
@@ -118,7 +120,7 @@ export class BarrelHost {
     for (const barrel of this.barrels) {
       if (barrel.recoilAnim > 0) barrel.recoilAnim = Math.max(0, barrel.recoilAnim - 0.15);
 
-      const period = barrelReloadTicks(stats, barrel.def);
+      const period = barrelReloadTicks(stats, barrel.def, owner.reloadScale());
       if (!barrel.primed) {
         // Start one full period in, which is what makes the first shot instant.
         barrel.cycle = period;

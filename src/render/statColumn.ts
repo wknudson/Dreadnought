@@ -70,8 +70,8 @@ export function statReadouts(player: Tank): StatReadout[] {
 
   // Through the weapon's own function, so the figure cannot drift from the
   // period the barrel is actually counting against.
-  const shotsPerSecond = (points: typeof player.points): number =>
-    barrel ? TICKS_PER_SECOND / barrelReloadTicks(points, barrel) : 0;
+  const shotsPerSecond = (points: typeof player.points, reloadScale: number): number =>
+    barrel ? TICKS_PER_SECOND / barrelReloadTicks(points, barrel, reloadScale) : 0;
 
   const figures: Record<StatKey, { now: number; was: number; unit: string }> = {
     regen: {
@@ -84,7 +84,11 @@ export function statReadouts(player: Tank): StatReadout[] {
     bulletSpeed: { now: liveShot?.acceleration ?? 0, was: baseShot?.acceleration ?? 0, unit: '' },
     bulletPen: { now: liveShot?.health ?? 0, was: baseShot?.health ?? 0, unit: '' },
     bulletDamage: { now: liveShot?.damage ?? 0, was: baseShot?.damage ?? 0, unit: '' },
-    reload: { now: shotsPerSecond(player.points), was: shotsPerSecond(emptyStats()), unit: '/s' },
+    reload: {
+      now: shotsPerSecond(player.points, player.reloadScale()),
+      was: shotsPerSecond(emptyStats(), 1),
+      unit: '/s',
+    },
     // Terminal speed is ten times the per-tick acceleration.
     moveSpeed: { now: live.acceleration * 10, was: base.acceleration * 10, unit: '' },
   };

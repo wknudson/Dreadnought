@@ -61,7 +61,13 @@ export interface DerivedTankStats {
   bodyDamage: number;
   /** Acceleration per tick; terminal speed is ten times this. */
   acceleration: number;
-  /** Multiplier applied to every barrel's reload period. */
+  /**
+   * What perks multiply every barrel's reload period by.
+   *
+   * The stat points are deliberately not in here. They scale a barrel's own
+   * period, which `barrelReloadTicks` owns, and having the curve in two places
+   * is what left this field unread for as long as it was.
+   */
   reloadScale: number;
 }
 
@@ -77,7 +83,7 @@ export function deriveTankStats(
     regenPerTick: regenPerTick(hp, stats.regen),
     bodyDamage: bodyDamagePerTick(stats.bodyDamage, isSpike),
     acceleration: moveAcceleration(level, stats.moveSpeed) * def.speedMultiplier,
-    reloadScale: Math.pow(0.914, stats.reload),
+    reloadScale: 1,
   };
 }
 
@@ -129,6 +135,14 @@ export const projectilePush = (
 ): number =>
   (7 / 3 + stats.bulletDamage) * barrel.projectile.damage * barrel.projectile.absorbtionFactor;
 
-/** A barrel's reload period in ticks for an owner with these stats. */
-export const barrelReloadTicks = (stats: StatBlock, barrel: BarrelDefinition): number =>
-  Math.max(1, reloadTicks(stats.reload, barrel.reload));
+/**
+ * A barrel's reload period in ticks for an owner with these stats.
+ *
+ * `scale` is whatever the owner's perks do to it, which is one for everything
+ * that has no perks.
+ */
+export const barrelReloadTicks = (
+  stats: StatBlock,
+  barrel: BarrelDefinition,
+  scale = 1,
+): number => Math.max(1, reloadTicks(stats.reload, barrel.reload) * scale);

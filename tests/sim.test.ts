@@ -449,6 +449,27 @@ test('a piercing charge carries a shot through a killing blow', () => {
   assert.equal(shot.alive, false);
 });
 
+test('a perk that changes reload reaches the barrels', () => {
+  const plain = quietRun();
+  advance(plain, 26, intent({ fire: true }));
+  assert.equal(bulletsIn(plain).length, 2, 'two shots on the usual fifteen-tick period');
+
+  // Counted rather than calculated: the point of this hook is that the barrel
+  // itself asks, and a formula agreeing with a formula would not show that.
+  const hasted = quietRun();
+  hasted.perks.add({
+    id: 'test-autoloader',
+    stacks: 1,
+    modifyStats: (stats) => {
+      stats.reloadScale *= 0.5;
+    },
+  });
+  hasted.player.refresh();
+
+  advance(hasted, 26, intent({ fire: true }));
+  assert.equal(bulletsIn(hasted).length, 4, 'twice as many once the period is halved');
+});
+
 test('a stat perk reaches the tank it belongs to', () => {
   const run = quietRun();
   const before = run.player.maxHealth;

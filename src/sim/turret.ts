@@ -56,6 +56,10 @@ export class AutoTurret implements BarrelOwner {
     return this.owner.scale();
   }
 
+  reloadScale(): number {
+    return this.owner.reloadScale();
+  }
+
   aimAngle(): number {
     return this.angle;
   }
@@ -140,4 +144,5 @@ export class AutoTurret implements BarrelOwner {
 export interface Tankish extends Entity {
   points: StatBlock;
   scale(): number;
+  reloadScale(): number;
 }

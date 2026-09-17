@@ -144,6 +144,10 @@ export class Tank extends Entity implements BarrelOwner, DroneCommander {
     return this.points;
   }
 
+  reloadScale(): number {
+    return this.derived.reloadScale;
+  }
+
   aimAngle(): number {
     return this.angle;
   }
