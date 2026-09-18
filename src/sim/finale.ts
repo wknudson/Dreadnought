@@ -39,6 +39,15 @@ interface FinalePhase {
   until: number;
 }
 
+/**
+ * Thresholds deliberately avoid a half.
+ *
+ * A boss enrages below half health: faster reload, and it closes to just over
+ * half its hold distance. Two thirds and one third put that squarely inside the
+ * Well, between reshapes, so the player reads one change at a time. A threshold
+ * moved to 0.5 would fire an arena reshape and a behaviour change on the same
+ * tick, which is more than the fight can say at once.
+ */
 const PHASES: readonly FinalePhase[] = [
   {
     id: 'hall',
@@ -94,6 +103,15 @@ export class FinaleDirector {
   /** Set when there is a line for the banner; cleared once the director reads it. */
   announcement: string | null = null;
 
+  /**
+   * How many drones the walls have swept away so far.
+   *
+   * Read by the harness rather than by the game. The win rate currently puts
+   * wave twenty-five out of reach of a full playthrough, so the only way to know
+   * the culls are firing at all is to ask them.
+   */
+  culled = 0;
+
   constructor(world: World, boss: Tank) {
     this.world = world;
     this.boss = boss;
@@ -103,6 +121,11 @@ export class FinaleDirector {
 
   private get phase(): FinalePhase {
     return PHASES[this.index]!;
+  }
+
+  /** Which shape the fight is in, for the debug readout and the harness. */
+  get phaseId(): FinalePhaseId {
+    return this.phase.id;
   }
 
   /** True once the Vise is the only thing left to reach. */
@@ -182,7 +205,13 @@ export class FinaleDirector {
   }
 
   /**
-   * Kills every drone the new bounds do not contain.
+   * Kills every drone of the Overlord's that the new bounds do not contain.
+   *
+   * The player's own drones are spared. The rule for this fight is that the
+   * walls never take anything from the player, and a cull that swept the field
+   * would quietly break it for exactly four classes: an Overlord loses its whole
+   * swarm at each transition while a Sniper loses nothing, which reads as the
+   * fight punishing a build rather than rewarding a position.
    *
    * Set `alive` rather than dealing damage: a drone swept away by a wall is not
    * a kill anyone made, and running it through the damage path would credit it,
@@ -190,9 +219,10 @@ export class FinaleDirector {
    */
   private cullDrones(bounds: Vec2): void {
     for (const e of this.world.entities) {
-      if (!e.alive || !(e instanceof Drone)) continue;
+      if (!e.alive || e.team !== 'enemy' || !(e instanceof Drone)) continue;
       if (Math.abs(e.pos.x) <= bounds.x && Math.abs(e.pos.y) <= bounds.y) continue;
       e.alive = false;
+      this.culled++;
     }
   }
 

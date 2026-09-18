@@ -9,8 +9,8 @@
  */
 import { Run } from '../src/sim/run.ts';
 import { Rng } from '../src/core/rng.ts';
-import { vec } from '../src/core/math.ts';
 import { TICKS_PER_SECOND } from '../src/core/loop.ts';
+import { botTick, median } from './bot.ts';
 import type { DifficultyId } from '../src/core/storage.ts';
 import { FINAL_WAVE } from '../src/data/waves.ts';
 
@@ -38,56 +38,7 @@ function playOne(seed: number, difficulty: DifficultyId): Result {
   let ticks = 0;
 
   while (!run.over && ticks < TICK_LIMIT) {
-    // Answer whatever the level-up is asking, picking at random so different
-    // seeds explore different builds rather than all taking the same one.
-    while (run.waitingOnChoice) {
-      const next = run.pendingChoices[0];
-      if (next === 'class') {
-        const options = run.classOptions();
-        if (options.length) run.upgradeTo(choiceRng.pick(options));
-        else run.consumeChoice('class');
-      } else {
-        const hand = run.dealHand();
-        if (hand.length) run.takeCard(choiceRng.pick(hand));
-        else run.consumeChoice('card');
-      }
-    }
-
-    // Nearest enemy, ignoring shots in flight.
-    let best: { x: number; y: number } | null = null;
-    let bestDistance = Number.POSITIVE_INFINITY;
-    for (const e of run.world.entities) {
-      if (!e.alive || e.team !== 'enemy' || e.kind === 'projectile') continue;
-      const d = Math.hypot(e.pos.x - run.player.pos.x, e.pos.y - run.player.pos.y);
-      if (d < bestDistance) {
-        bestDistance = d;
-        best = e.pos;
-      }
-    }
-
-    const aim = best
-      ? Math.atan2(best.y - run.player.pos.y, best.x - run.player.pos.x)
-      : 0;
-    // Back off when crowded, close when out of reach, circle in between.
-    const heading =
-      bestDistance < 450 ? aim + Math.PI : bestDistance > 900 ? aim : aim + Math.PI / 2;
-
-    run.applyIntent(
-      {
-        move: best ? vec(Math.cos(heading), Math.sin(heading)) : vec(),
-        aimAngle: aim,
-        aimWorld: vec(
-          run.player.pos.x + Math.cos(aim) * 800,
-          run.player.pos.y + Math.sin(aim) * 800,
-        ),
-        fire: true,
-        secondary: false,
-        autoFire: true,
-        autoSpin: false,
-      },
-      aim,
-    );
-    run.tick();
+    botTick(run, choiceRng);
     ticks++;
     if (!waveAt.has(run.wave)) waveAt.set(run.wave, ticks);
   }
@@ -114,12 +65,6 @@ function playOne(seed: number, difficulty: DifficultyId): Result {
     perks: run.perkSummary().length,
   };
 }
-
-const median = (values: number[]): number => {
-  if (!values.length) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)]!;
-};
 
 function main(): void {
   const seeds = [11, 22, 33, 44, 55, 66, 77, 88];

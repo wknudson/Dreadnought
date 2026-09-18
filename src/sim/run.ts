@@ -146,6 +146,11 @@ export class Run implements PerkHost {
 
   // --- What the interface reads ---------------------------------------------
 
+  /** Where the authored last fight has got to, or null when it is not running. */
+  get finale(): { phase: string; culled: number } | null {
+    return this.waves.finaleReport;
+  }
+
   /** A one-off announcement from the wave layer, with a counter to spot repeats. */
   get banner(): { text: string; id: number } {
     return this.waves.banner;
