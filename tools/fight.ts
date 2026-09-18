@@ -45,7 +45,24 @@ import { botTick, answerChoices, median } from './bot.ts';
  */
 const FIGHT_LIMIT = TICKS_PER_SECOND * 60 * 6;
 
+/**
+ * The first sixteen seeds, kept in this order so older numbers stay comparable.
+ *
+ * `--seeds` past this many continues the list rather than stopping at it. Six
+ * of these cells came down to two or three cleared fights when someone split
+ * them per modifier, and a harness that cannot be asked for a bigger sample is
+ * a harness that answers every question with the same shrug.
+ */
 const DEFAULT_SEEDS = [11, 22, 33, 44, 55, 66, 77, 88, 99, 111, 222, 333, 444, 555, 666, 777];
+
+/** The first `count` seeds, extending the fixed list deterministically. */
+function seedsFor(count: number): number[] {
+  const seeds = DEFAULT_SEEDS.slice(0, Math.min(count, DEFAULT_SEEDS.length));
+  // An odd stride off a round base, so continuing the list never lands back on
+  // one of the sixteen and a given count always means the same set of runs.
+  for (let i = DEFAULT_SEEDS.length; i < count; i++) seeds.push(1009 + (i - 15) * 37);
+  return seeds;
+}
 const ALL_DIFFICULTIES: DifficultyId[] = ['easy', 'normal', 'hard'];
 
 /**
@@ -230,7 +247,10 @@ function parseArgs(argv: string[]): {
   }
 
   const count = Number(get('--seeds') ?? DEFAULT_SEEDS.length);
-  const seeds = DEFAULT_SEEDS.slice(0, Math.max(1, Math.min(count, DEFAULT_SEEDS.length)));
+  if (!Number.isInteger(count) || count < 1 || count > 512) {
+    throw new Error('--seeds must be between 1 and 512');
+  }
+  const seeds = seedsFor(count);
 
   const modifierRaw = get('--modifier');
   const known = [...MODIFIERS.map((m) => m.id), 'none'] as const;

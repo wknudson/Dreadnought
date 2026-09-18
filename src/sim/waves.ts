@@ -318,10 +318,15 @@ export class WaveDirector {
 
   private clearWave(): void {
     // The arena stops taking a hand the moment the wave it belonged to is over,
-    // so the breather is always fought in a plain square.
+    // so the breather is always spent in a plain square. Dropping the modifier
+    // is not enough on its own: nothing recomputes the target until the next
+    // wave begins, so a Tide that cleared mid-swing would leave the arena
+    // holding whatever shape it happened to be in for the whole breather.
     this.modifier = null;
     this.modifierAnnounceIn = 0;
     this.meteors = [];
+    const size = arenaSizeForWave(this.wave, this.viewReference);
+    this.world.arena.targetHalf = vec(size, size);
 
     this.events.onWaveClear(this.wave);
     if (this.wave >= FINAL_WAVE) {

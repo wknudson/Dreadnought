@@ -24,6 +24,14 @@ export interface ArenaModifier {
   /** Announced on the banner as the wave opens. */
   name: string;
   /**
+   * Whether a run may draw this.
+   *
+   * A modifier that is built, tested and reachable by the harness but not yet
+   * trusted in front of a player stays here with this false, rather than being
+   * deleted and rewritten later.
+   */
+  live: boolean;
+  /**
    * Share of the wave's enemy budget this is worth.
    *
    * Set by what the modifier does to the player rather than by how it looks: the
@@ -155,6 +163,7 @@ export const MODIFIERS: readonly ArenaModifier[] = [
   {
     // The room closes and does not open again. Kiting has an expiry.
     id: 'crush',
+    live: true,
     name: 'THE CRUSH',
     budgetShare: 0.3,
     shape: (nominal, ticks) => {
@@ -167,6 +176,7 @@ export const MODIFIERS: readonly ArenaModifier[] = [
     // The arena breathes between wide and tall. Nothing is ever taken away, but
     // no position stays good, which is what makes it cheap and still felt.
     id: 'tide',
+    live: true,
     name: 'THE TIDE',
     budgetShare: 0.12,
     shape: (nominal, ticks) => {
@@ -176,24 +186,29 @@ export const MODIFIERS: readonly ArenaModifier[] = [
   },
   {
     /*
-     * The only modifier that threatens a specific place rather than the room,
-     * and the only one the budget cannot price.
+     * Built, tested, and held out of the pool until a person has played it.
      *
-     * The Crush and the Tide measure as they were meant to: a wave carrying one
-     * clears about as often as a wave carrying neither, because what they take
-     * from the player they hand back in enemies the wave can no longer afford.
-     * Meteors does not. At 0.22 of the wave the harness clears it 3 times in 16
-     * against 7 for a clean wave, and at 0.38 it clears it once — no better,
-     * because the escort was never what was killing anyone.
+     * Over 64 seeds at wave twenty the Crush and the Tide clear 29 against 32
+     * for a clean wave, which is the neutrality they were built for. Meteors
+     * clears 7. Nothing about its own numbers moves that: halving the damage
+     * gives 9, lengthening the interval and widening the spread gives 9, and
+     * raising its share of the budget from 0.22 to 0.38 gives 1, because the
+     * escort was never what was killing anyone.
      *
-     * Enemies and damage aimed at the player are not fungible, so there is no
-     * share that makes this one neutral. What there is instead is a harness that
-     * cannot play it: the bot never dodges, and dodging is the whole of this
-     * modifier's counterplay, so it takes every blast a human would walk out of.
-     * The reading is real and it is also the worst case. This one has to be
-     * judged by playing it, and its damage is the lever if it needs one.
+     * Setting the damage to zero gives 29. That is the whole problem in one
+     * number. The bot never dodges, so it takes every blast, and any sustained
+     * damage it cannot avoid kills it over a sixty-second fight; the only
+     * setting this harness will endorse is none at all. It cannot tell a fair
+     * meteor from a lethal one, so its verdict here is not evidence and must
+     * not be treated as any.
+     *
+     * A human dodges most of these, and at a fifth of the blasts taken the
+     * arithmetic lands somewhere reasonable — which is a guess, and guessing is
+     * the reason this is not in the pool. Turning `live` on is the whole of
+     * shipping it, once someone has played a wave of it and said.
      */
     id: 'meteors',
+    live: false,
     name: 'METEORS',
     budgetShare: 0.22,
     tick: tickMeteors,
@@ -214,7 +229,10 @@ export const getModifier = (id: ModifierId): ArenaModifier =>
  * Not wave twenty-five either: the Fallen Overlord has an authored arena of its
  * own, and rolling a second one on top would be two fights arguing.
  */
-export const MODIFIED_WAVES: readonly number[] = [10, 15, 20];
+export const MODIFIED_WAVES: readonly number[] = [10, 15];
+// Two waves because two modifiers are live. It grows with the pool: a run draws
+// without replacement, so more waves than modifiers would leave the last of them
+// reliably plain, which is a worse pattern than one fewer modified wave.
 
 /**
  * Picks the modifiers a run will use, in the order it will meet them.
@@ -224,7 +242,7 @@ export const MODIFIED_WAVES: readonly number[] = [10, 15, 20];
  * reproduces its whole arc rather than just its waves.
  */
 export function rollModifiers(rng: Rng): Map<number, ModifierId> {
-  const pool = MODIFIERS.map((m) => m.id);
+  const pool = MODIFIERS.filter((m) => m.live).map((m) => m.id);
   const rolled = new Map<number, ModifierId>();
   for (const wave of MODIFIED_WAVES) {
     if (!pool.length) break;
