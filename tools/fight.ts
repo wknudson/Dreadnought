@@ -170,10 +170,15 @@ function runBlock(setup: Setup, seeds: number[]): Trial[] {
 
   const stuck = trials.filter((t) => t.outcome === 'STUCK');
   const cleared = trials.filter((t) => t.outcome === 'cleared');
+  // Both medians, because the all-trial one is the number that gets quoted and
+  // it mixes clears with deaths: a change that kills the player faster shortens
+  // it while making every fight that finishes longer. A fight the player lost in
+  // seven seconds is not a fight length.
   console.log(
     `  -> resolved ${trials.length - stuck.length}/${trials.length}` +
       `, cleared ${cleared.length}/${trials.length}` +
-      `, median ${median(trials.map((t) => t.seconds))}s`,
+      `, median ${median(trials.map((t) => t.seconds))}s all` +
+      `, ${median(cleared.map((t) => t.seconds))}s cleared`,
   );
   // The population, every time, because it is what the reading is about.
   console.log(
