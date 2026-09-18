@@ -22,12 +22,25 @@ export interface Difficulty {
   /**
    * Chance a card slot offers a perk rather than a stat.
    *
-   * Tied to the size of the perk pool, which is the part that is easy to miss.
-   * A run draws a fixed number of cards, so every perk added to the pool makes
-   * each one rarer, and a run is won by assembling a few perks that work
-   * together rather than by collecting many. The harness is blunt about it:
-   * adding twelve perks that do nothing at all costs as many runs as adding
-   * twelve real ones. Grow the pool and this has to grow with it.
+   * The lever that pays for the perk pool existing, and the one that quietly
+   * sets how much damage a player brings to a boss. A run deals 33 cards and
+   * each slot rolls this independently, so a player ends with about 33 * (1 -
+   * this) stat points: 24.8 at a quarter, 15.8 at a half. Raising it is what
+   * recovers the runs a bigger pool costs, and the recovery flattens.
+   *
+   * It is not tied to how many perks there are, which is the trap. Going from
+   * fifteen perks to twenty-one costs the same as going to twenty-seven, and
+   * twelve perks that do nothing cost as much as twelve real ones: a run is won
+   * by assembling the survival stack, and anything new in the pool displaces it.
+   *
+   * Push it too far and the win rate will thank you while the game gets worse.
+   * Measured before `statShareOf` existed, hard at 0.52 won one more run in
+   * thirty than at 0.44 and took 106 seconds to kill a boss instead of 68: the
+   * win rate called that an improvement while the fight it was measuring grew
+   * by three quarters. `bossHealthForWave` now corrects its level term for this
+   * number, so that particular drift is answered and a rate moved today will
+   * not repeat it. What the correction cannot answer is how the game plays with
+   * a third of a run's cards spent on perks, so read fight length, not wins.
    */
   perkChance: number;
   /**
@@ -43,7 +56,7 @@ export interface Difficulty {
 export const DIFFICULTIES: Readonly<Record<DifficultyId, Difficulty>> = {
   easy: {
     id: 'easy', name: 'Easy',
-    health: 0.8, damage: 0.65, budget: 0.8, breather: 8, perkChance: 0.39, xpBonus: 1.45,
+    health: 0.8, damage: 0.65, budget: 0.8, breather: 8, perkChance: 0.35, xpBonus: 1.45,
   },
   normal: {
     id: 'normal', name: 'Normal',
@@ -51,7 +64,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, Difficulty>> = {
   },
   hard: {
     id: 'hard', name: 'Hard',
-    health: 1.3, damage: 1.35, budget: 1.3, breather: 4, perkChance: 0.49, xpBonus: 1,
+    health: 1.3, damage: 1.35, budget: 1.3, breather: 4, perkChance: 0.44, xpBonus: 1,
   },
 };
 

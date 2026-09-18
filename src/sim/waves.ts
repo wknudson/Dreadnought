@@ -26,7 +26,7 @@ import type { Entity } from './entity.ts';
 import { vec, type Vec2 } from '../core/math.ts';
 import { TICKS_PER_SECOND } from '../core/loop.ts';
 import { DEFAULT_ARENA_HALF_SIZE } from './world.ts';
-import { FinaleDirector } from './finale.ts';
+import { FinaleDirector, type FinalePhaseId } from './finale.ts';
 
 /** What the director is doing right now. */
 export type WavePhase = 'idle' | 'incoming' | 'fighting' | 'breather' | 'won';
@@ -402,6 +402,17 @@ export class WaveDirector {
    */
   arenaTarget(nominal: number): Vec2 {
     return this.finale?.arenaTarget(nominal) ?? vec(nominal, nominal);
+  }
+
+  /**
+   * Where the last fight has got to, or null when it is not running.
+   *
+   * Exists so the harness can watch a fight it can no longer reach by playing:
+   * at the current win rate a full run arrives at wave twenty-five a couple of
+   * times in twenty-four, which is not enough to notice a phase that never ends.
+   */
+  get finaleReport(): { phase: FinalePhaseId; culled: number } | null {
+    return this.finale ? { phase: this.finale.phaseId, culled: this.finale.culled } : null;
   }
 
   /** Advances the last fight and forwards anything it wants announced. */

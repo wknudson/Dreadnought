@@ -12,7 +12,9 @@
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "data": "node --experimental-strip-types tools/convert-tanks.ts",
     "check": "npm run data && npm test && npm run build",
-    "balance": "node --experimental-strip-types tools/balance.ts"
+    "balance": "node --experimental-strip-types tools/balance.ts",
+    "finale": "node --experimental-strip-types tools/fight.ts --wave 25",
+    "fight": "node --experimental-strip-types tools/fight.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.3",
