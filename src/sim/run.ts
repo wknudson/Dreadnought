@@ -155,6 +155,11 @@ export class Run implements PerkHost {
 
   // --- What the interface reads ---------------------------------------------
 
+  /** The arena modifier on the current wave, for the heads-up display. */
+  get modifierName(): string | null {
+    return this.waves.modifierName;
+  }
+
   /** Where the authored last fight has got to, or null when it is not running. */
   get finale(): { phase: string; culled: number } | null {
     return this.waves.finaleReport;

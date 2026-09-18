@@ -220,10 +220,22 @@ export function enemyLevel(playerLevel: number, tier: number, jitter = 0): numbe
  * the costs and the budget formula above. That keeps tuning to a few numbers
  * instead of thirty hand-written tables.
  */
-export function generateWave(index: number, difficulty: Difficulty, rng: Rng): WaveDef {
+export function generateWave(
+  index: number,
+  difficulty: Difficulty,
+  rng: Rng,
+  /**
+   * What is left of the wave's budget after the arena has taken its share.
+   *
+   * An arena modifier is part of the wave rather than an addition to it, so the
+   * enemies it buys come out of the same purse. Without this a modified wave is
+   * simply a harder wave, which is the one thing these must not be.
+   */
+  budgetScale = 1,
+): WaveDef {
   const boss = bossFor(index);
   // A boss wave brings a smaller escort, since the boss is the fight.
-  let budget = budgetForWave(index, difficulty) * (boss ? 0.45 : 1);
+  let budget = budgetForWave(index, difficulty) * (boss ? 0.45 : 1) * budgetScale;
 
   const available = ENEMY_OPTIONS.filter((o) => index >= o.unlockWave && o.cost <= budget);
   const groups: SpawnGroup[] = [];

@@ -27,6 +27,17 @@ import { vec, type Vec2 } from '../core/math.ts';
 import { TICKS_PER_SECOND } from '../core/loop.ts';
 import { DEFAULT_ARENA_HALF_SIZE } from './world.ts';
 import { FinaleDirector, type FinalePhaseId } from './finale.ts';
+import {
+  getModifier,
+  MODIFIED_WAVES,
+  rollModifiers,
+  type ArenaModifier,
+  type ModifierId,
+  type PendingMeteor,
+} from './modifiers.ts';
+
+/** How long after a wave opens its modifier names itself. */
+const MODIFIER_ANNOUNCE_DELAY = Math.round(TICKS_PER_SECOND * 2.8);
 
 /** What the director is doing right now. */
 export type WavePhase = 'idle' | 'incoming' | 'fighting' | 'breather' | 'won';
@@ -102,9 +113,32 @@ export class WaveDirector {
   private current: WaveDef | null = null;
   /** Runs the authored last fight while the Fallen Overlord stands. */
   private finale: FinaleDirector | null = null;
+  /** Which modifier each boss wave drew, fixed for the whole run. */
+  private readonly rolled: Map<number, ModifierId>;
+  /** The modifier running on the current wave, if it drew one. */
+  private modifier: ArenaModifier | null = null;
+  /** Meteors in the air, cleared with the wave that made them. */
+  private meteors: PendingMeteor[] = [];
+  /**
+   * Ticks until the modifier names itself.
+   *
+   * A beat after the wave's own banner rather than instead of it. A boss wave
+   * has two things to say and they arrive together otherwise, with the second
+   * wiping the first before it has been read.
+   */
+  private modifierAnnounceIn = 0;
   /** Groups of the current wave not yet released. */
   private queue: SpawnGroup[] = [];
   private waveTicks = 0;
+
+  /**
+   * Forces which modifier a modified wave draws, or none at all.
+   *
+   * For the harness. Each modifier buys a different share of its wave, so a
+   * sweep that lets every run roll its own measures the three of them averaged
+   * together and can say nothing about any one. Left null the run rolls.
+   */
+  forceModifier: ModifierId | 'none' | null = null;
 
   /** The player's level, which boss scaling reads. Kept current by the run. */
   playerLevel = 1;
@@ -126,6 +160,13 @@ export class WaveDirector {
     this.rng = rng;
     this.difficulty = difficulty;
     this.events = events;
+    // Drawn once, from the run's own stream, so a seed reproduces its whole arc.
+    this.rolled = rollModifiers(this.rng.fork('modifiers'));
+  }
+
+  /** The modifier on the current wave, for the heads-up display. */
+  get modifierName(): string | null {
+    return this.modifier?.name ?? null;
   }
 
   /** Seconds left before the next wave, for the heads-up display. */
@@ -133,13 +174,23 @@ export class WaveDirector {
     return this.phase === 'breather' ? this.breatherTicks / TICKS_PER_SECOND : 0;
   }
 
-  /** Rings to draw where something is about to appear. */
+  /** Rings to draw where something is about to appear or land. */
   warnings(): WarningRing[] {
-    return this.pending.map((p) => ({
+    const rings = this.pending.map((p) => ({
       pos: p.at,
       radius: p.radius,
       progress: 1 - p.ticksLeft / WARNING_TICKS,
     }));
+    // A meteor about to land is the same promise as a spawn about to happen, and
+    // reusing the ring means the player has only one thing to learn to read.
+    for (const meteor of this.meteors) {
+      rings.push({
+        pos: meteor.at,
+        radius: meteor.radius,
+        progress: 1 - meteor.ticksLeft / meteor.totalTicks,
+      });
+    }
+    return rings;
   }
 
   /** Enemies still standing between the player and the next breather. */
@@ -184,6 +235,11 @@ export class WaveDirector {
     }
 
     if (this.finale) this.tickFinale();
+    else if (this.modifier) this.tickModifier();
+
+    if (this.modifierAnnounceIn > 0 && --this.modifierAnnounceIn === 0 && this.modifier) {
+      this.banner = { text: this.modifier.name, id: this.banner.id + 1 };
+    }
 
     switch (this.phase) {
       case 'incoming':
@@ -225,6 +281,15 @@ export class WaveDirector {
     this.wave = index;
     this.waveTicks = 0;
     this.tracked.clear();
+    // Nothing in the air survives the wave that launched it.
+    this.meteors = [];
+
+    // Rolled before the wave is built, because the wave has to be able to afford
+    // it: a modifier is part of the wave rather than something laid on top.
+    const drew = this.forceModifier ?? this.rolled.get(index);
+    this.modifier =
+      drew && drew !== 'none' && MODIFIED_WAVES.includes(index) ? getModifier(drew) : null;
+    this.modifierAnnounceIn = this.modifier ? MODIFIER_ANNOUNCE_DELAY : 0;
 
     // A wave that begins while the last fight is still running means the run
     // was jumped rather than played, and the arena must not keep its shape.
@@ -232,7 +297,12 @@ export class WaveDirector {
       this.finale.release();
       this.finale = null;
     }
-    this.current = generateWave(index, this.difficulty, this.rng);
+    this.current = generateWave(
+      index,
+      this.difficulty,
+      this.rng,
+      1 - (this.modifier?.budgetShare ?? 0),
+    );
     this.queue = [...this.current.groups];
     this.phase = 'incoming';
 
@@ -247,6 +317,12 @@ export class WaveDirector {
   }
 
   private clearWave(): void {
+    // The arena stops taking a hand the moment the wave it belonged to is over,
+    // so the breather is always fought in a plain square.
+    this.modifier = null;
+    this.modifierAnnounceIn = 0;
+    this.meteors = [];
+
     this.events.onWaveClear(this.wave);
     if (this.wave >= FINAL_WAVE) {
       this.phase = 'won';
@@ -399,7 +475,9 @@ export class WaveDirector {
    * so a window dragged mid-fight cannot hand the Overlord its square back.
    */
   arenaTarget(nominal: number): Vec2 {
-    return this.finale?.arenaTarget(nominal) ?? vec(nominal, nominal);
+    if (this.finale) return this.finale.arenaTarget(nominal);
+    if (this.modifier?.shape) return this.modifier.shape(nominal, this.waveTicks);
+    return vec(nominal, nominal);
   }
 
   /**
@@ -411,6 +489,30 @@ export class WaveDirector {
    */
   get finaleReport(): { phase: FinalePhaseId; culled: number } | null {
     return this.finale ? { phase: this.finale.phaseId, culled: this.finale.culled } : null;
+  }
+
+  /**
+   * Advances the modifier running on this wave.
+   *
+   * Given the wave's nominal size rather than the arena's current one, so a
+   * shape is always a statement about the wave and never about where the last
+   * tick happened to leave the border.
+   */
+  private tickModifier(): void {
+    const modifier = this.modifier!;
+    const nominal = arenaSizeForWave(this.wave, this.viewReference);
+
+    if (modifier.shape) this.world.arena.targetHalf = modifier.shape(nominal, this.waveTicks);
+    modifier.tick?.({
+      world: this.world,
+      player: this.player,
+      rng: this.rng,
+      ticks: this.waveTicks,
+      wave: this.wave,
+      damageScale: this.difficulty.damage,
+      warnings: [],
+      meteors: this.meteors,
+    });
   }
 
   /** Advances the last fight and forwards anything it wants announced. */

@@ -216,17 +216,18 @@ function drawWaveStatus(
   const countdown = run.countdown;
   if (countdown > 0) {
     outlinedText(ctx, `Next wave in ${Math.ceil(countdown)}`, width / 2, 60 * scale, 19 * scale);
-    return;
-  }
-
-  if (run.bossName) {
+  } else if (run.bossName) {
     outlinedText(ctx, run.bossName, width / 2, 60 * scale, 20 * scale);
-    return;
+  } else {
+    const left = run.enemiesLeft;
+    if (left > 0) outlinedText(ctx, `${left} left`, width / 2, 58 * scale, 17 * scale);
   }
 
-  const left = run.enemiesLeft;
-  if (left > 0) {
-    outlinedText(ctx, `${left} left`, width / 2, 58 * scale, 17 * scale);
+  // A modifier lasts the whole wave, so the banner that announced it is long
+  // gone by the time it matters. It sits below whatever the wave itself had to
+  // say, since on a boss wave both are true at once.
+  if (run.modifierName) {
+    outlinedText(ctx, run.modifierName, width / 2, 82 * scale, 15 * scale);
   }
 }
 

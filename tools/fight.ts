@@ -24,6 +24,7 @@
  *   npm run fight -- --wave 15 --difficulty hard    one boss, one difficulty
  *   npm run fight -- --wave 15 --perk-chance 0.35,0.52
  *   npm run fight -- --wave 20 --level 38 --seeds 24
+ *   npm run fight -- --wave 20 --modifier each      one arena modifier at a time
  */
 import { Run } from '../src/sim/run.ts';
 import { Rng } from '../src/core/rng.ts';
@@ -32,6 +33,7 @@ import type { DifficultyId } from '../src/core/storage.ts';
 import { FINAL_WAVE } from '../src/data/waves.ts';
 import { MAX_LEVEL, CLASS_LEVELS } from '../src/data/leveling.ts';
 import { STAT_ORDER } from '../src/data/schema.ts';
+import { MODIFIERS, type ModifierId } from '../src/sim/modifiers.ts';
 import { botTick, answerChoices, median } from './bot.ts';
 
 /**
@@ -80,6 +82,8 @@ interface Setup {
   level: number;
   difficulty: DifficultyId;
   perkChance: number | null;
+  /** Forces the wave's arena modifier, so one can be measured rather than three. */
+  modifier: ModifierId | 'none' | null;
 }
 
 function playFight(seed: number, setup: Setup): Trial {
@@ -99,6 +103,7 @@ function playFight(seed: number, setup: Setup): Trial {
   }
 
   const statPoints = STAT_ORDER.reduce((total, stat) => total + (run.player.points[stat] ?? 0), 0);
+  run.waves.forceModifier = setup.modifier;
   run.waves.jumpTo(setup.wave);
 
   const phaseTicks = new Map<string, number>();
@@ -145,7 +150,12 @@ function playFight(seed: number, setup: Setup): Trial {
 
 function runBlock(setup: Setup, seeds: number[]): Trial[] {
   const rate = setup.perkChance === null ? 'default' : setup.perkChance.toFixed(2);
-  console.log(`\n=== wave ${setup.wave}, ${setup.difficulty}, level ${setup.level}, perkChance ${rate} ===`);
+  const forced = setup.modifier === null ? 'rolled' : setup.modifier;
+  console.log(
+    `
+=== wave ${setup.wave}, ${setup.difficulty}, level ${setup.level}, ` +
+      `perkChance ${rate}, modifier ${forced} ===`,
+  );
 
   const trials = seeds.map((seed) => playFight(seed, setup));
   for (const t of trials) {
@@ -180,6 +190,7 @@ function parseArgs(argv: string[]): {
   difficulties: DifficultyId[];
   rates: (number | null)[];
   seeds: number[];
+  modifiers: (ModifierId | 'none' | null)[];
 } {
   const get = (flag: string): string | null => {
     const i = argv.indexOf(flag);
@@ -216,7 +227,21 @@ function parseArgs(argv: string[]): {
   const count = Number(get('--seeds') ?? DEFAULT_SEEDS.length);
   const seeds = DEFAULT_SEEDS.slice(0, Math.max(1, Math.min(count, DEFAULT_SEEDS.length)));
 
-  return { wave, level, difficulties, rates, seeds };
+  const modifierRaw = get('--modifier');
+  const known = [...MODIFIERS.map((m) => m.id), 'none'] as const;
+  const modifiers: (ModifierId | 'none' | null)[] =
+    modifierRaw === null
+      ? [null]
+      : modifierRaw === 'each'
+        ? [...known]
+        : (modifierRaw.split(',') as (ModifierId | 'none')[]);
+  for (const m of modifiers) {
+    if (m !== null && !known.includes(m as (typeof known)[number])) {
+      throw new Error(`unknown modifier ${m}; try one of ${known.join(', ')} or 'each'`);
+    }
+  }
+
+  return { wave, level, difficulties, rates, seeds, modifiers };
 }
 
 function main(): void {
@@ -226,7 +251,11 @@ function main(): void {
 
   for (const difficulty of args.difficulties) {
     for (const perkChance of args.rates) {
-      all.push(...runBlock({ wave: args.wave, level, difficulty, perkChance }, args.seeds));
+      for (const modifier of args.modifiers) {
+        all.push(
+          ...runBlock({ wave: args.wave, level, difficulty, perkChance, modifier }, args.seeds),
+        );
+      }
     }
   }
 
