@@ -56,7 +56,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, Difficulty>> = {
   },
   normal: {
     id: 'normal', name: 'Normal',
-    health: 1, damage: 1, budget: 1, breather: 6, perkChance: 0.37, xpBonus: 1.15,
+    health: 1, damage: 1, budget: 1, breather: 6, perkChance: 0.35, xpBonus: 1.15,
   },
   hard: {
     id: 'hard', name: 'Hard',
