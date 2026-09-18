@@ -37,10 +37,11 @@ export interface Difficulty {
    * Measured before `statShareOf` existed, hard at 0.52 won one more run in
    * thirty than at 0.44 and took 106 seconds to kill a boss instead of 68: the
    * win rate called that an improvement while the fight it was measuring grew
-   * by three quarters. `bossHealthForWave` now corrects its level term for this
-   * number, so that particular drift is answered and a rate moved today will
-   * not repeat it. What the correction cannot answer is how the game plays with
-   * a third of a run's cards spent on perks, so read fight length, not wins.
+   * by three quarters. `bossHealthForWave` now scales its whole curve by the
+   * stat share this leaves, so that particular drift is answered and a rate
+   * moved today will not repeat it. What the correction cannot answer is how
+   * the game plays with a third of a run's cards spent on perks, so read fight
+   * length, not wins.
    */
   perkChance: number;
   /**
