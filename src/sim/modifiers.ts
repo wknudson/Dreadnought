@@ -97,9 +97,17 @@ const CRUSH_FLOOR = 0.42;
 const CRUSH_TICKS = TICKS_PER_SECOND * 45;
 
 /** How far the Tide swings either side of the nominal size. */
-const TIDE_AMPLITUDE = 0.38;
+const TIDE_AMPLITUDE = 0.24;
 /** One full breath, in ticks. */
 const TIDE_PERIOD = TICKS_PER_SECOND * 22;
+/**
+ * When the Tide stops breathing and holds at its narrowest.
+ *
+ * Matched to the wave director's own patience, which is when it gives up on a
+ * wave arriving politely and sends the stragglers after the player. Past that
+ * point the arena stops handing room back for the same reason.
+ */
+const TIDE_SETTLE_TICKS = TICKS_PER_SECOND * 40;
 
 /** Ticks between meteors. */
 const METEOR_INTERVAL = TICKS_PER_SECOND * 4;
@@ -173,15 +181,37 @@ export const MODIFIERS: readonly ArenaModifier[] = [
     },
   },
   {
-    // The arena breathes between wide and tall. Nothing is ever taken away, but
-    // no position stays good, which is what makes it cheap and still felt.
+    /*
+     * The arena leans between wide and tall, and is never larger than the square
+     * it would have been.
+     *
+     * That cap is not decoration. The first version swung either side of the
+     * nominal size, and it could not clear a boss against a build that kites:
+     * with a still arena the player runs out of room and the fight resolves in
+     * the corner it backed into, and a wall that moves outward hands that corner
+     * back every few seconds. One seed went from the boss at 3% after eighty
+     * seconds to the boss at 74% after three hundred, on the same build, purely
+     * because it never ran out of somewhere to retreat to.
+     *
+     * Capping it was not enough on its own, because a wall that grows at all
+     * hands the corner back whether or not it passes the baseline doing it. So
+     * the breathing stops: past the wave director's own patience the Tide holds
+     * at its narrowest and the arena is still again. The player gets forty
+     * seconds of a moving room and then a small one, which is the same bargain
+     * the director makes when it stops waiting and sends the stragglers in.
+     */
     id: 'tide',
     live: true,
     name: 'THE TIDE',
     budgetShare: 0.12,
     shape: (nominal, ticks) => {
+      const narrow = nominal * (1 - TIDE_AMPLITUDE * 2);
+      if (ticks > TIDE_SETTLE_TICKS) return vec(narrow, narrow);
       const swing = Math.sin((ticks / TIDE_PERIOD) * Math.PI * 2) * TIDE_AMPLITUDE;
-      return vec(nominal * (1 + swing), nominal * (1 - swing));
+      return vec(
+        nominal * (1 - TIDE_AMPLITUDE + swing),
+        nominal * (1 - TIDE_AMPLITUDE - swing),
+      );
     },
   },
   {

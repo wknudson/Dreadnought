@@ -99,7 +99,7 @@ test('the crush closes the arena, and not to nothing', () => {
   assert.ok(closed.x > 200, `closed too far, ${closed.x}`);
 });
 
-test('the tide runs both wide and narrow', () => {
+test('the tide leans both ways without ever growing the arena', () => {
   const tide = MODIFIERS.find((m) => m.id === 'tide')!;
   const widths: number[] = [];
   const heights: number[] = [];
@@ -108,10 +108,30 @@ test('the tide runs both wide and narrow', () => {
     widths.push(shape.x);
     heights.push(shape.y);
   }
-  assert.ok(Math.max(...widths) > 1100, 'the tide should run wide');
-  assert.ok(Math.min(...widths) < 900, 'and narrow');
-  // Antiphase: it changes shape rather than simply changing size.
-  assert.ok(Math.max(...heights) > 1100 && Math.min(...heights) < 900, 'on both axes');
+
+  // It changes shape rather than just size: each axis leads at some point.
+  assert.ok(Math.max(...widths) > Math.min(...widths) * 1.3, 'the tide should lean');
+  assert.ok(Math.max(...heights) > Math.min(...heights) * 1.3, 'on both axes');
+
+  // And never hands room back beyond the square the wave would have had. A wall
+  // that grows un-corners a player who is being chased, and the arena running
+  // out of room is what ends a fight against a build that kites.
+  assert.ok(Math.max(...widths) <= 1000, `the tide grew the arena to ${Math.max(...widths)}`);
+  assert.ok(Math.max(...heights) <= 1000, `the tide grew the arena to ${Math.max(...heights)}`);
+});
+
+test('the tide stops moving once a wave has overstayed', () => {
+  const tide = MODIFIERS.find((m) => m.id === 'tide')!;
+  // Past the director's patience it must be still, or a fight that is already
+  // running long keeps being handed somewhere new to retreat to.
+  const late = [50, 60, 75, 90, 120].map((seconds) =>
+    tide.shape!(1000, TICKS_PER_SECOND * seconds),
+  );
+  for (const shape of late) {
+    assert.equal(shape.x, late[0]!.x, 'the settled tide should not move');
+    assert.equal(shape.x, shape.y, 'and should be square');
+  }
+  assert.ok(late[0]!.x < 1000, 'it settles narrow rather than back at full size');
 });
 
 test('a meteor waits before it lands, then hurts what it lands on', () => {
