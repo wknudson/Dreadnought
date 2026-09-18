@@ -19,7 +19,16 @@ export interface Difficulty {
   budget: number;
   /** Seconds of quiet between waves. */
   breather: number;
-  /** Chance a card slot offers a perk rather than a stat. */
+  /**
+   * Chance a card slot offers a perk rather than a stat.
+   *
+   * Tied to the size of the perk pool, which is the part that is easy to miss.
+   * A run draws a fixed number of cards, so every perk added to the pool makes
+   * each one rarer, and a run is won by assembling a few perks that work
+   * together rather than by collecting many. The harness is blunt about it:
+   * adding twelve perks that do nothing at all costs as many runs as adding
+   * twelve real ones. Grow the pool and this has to grow with it.
+   */
   perkChance: number;
   /**
    * Multiplier on experience earned.
@@ -34,15 +43,15 @@ export interface Difficulty {
 export const DIFFICULTIES: Readonly<Record<DifficultyId, Difficulty>> = {
   easy: {
     id: 'easy', name: 'Easy',
-    health: 0.8, damage: 0.65, budget: 0.8, breather: 8, perkChance: 0.28, xpBonus: 1.45,
+    health: 0.8, damage: 0.65, budget: 0.8, breather: 8, perkChance: 0.39, xpBonus: 1.45,
   },
   normal: {
     id: 'normal', name: 'Normal',
-    health: 1, damage: 1, budget: 1, breather: 6, perkChance: 0.25, xpBonus: 1.15,
+    health: 1, damage: 1, budget: 1, breather: 6, perkChance: 0.35, xpBonus: 1.15,
   },
   hard: {
     id: 'hard', name: 'Hard',
-    health: 1.3, damage: 1.35, budget: 1.3, breather: 4, perkChance: 0.35, xpBonus: 1,
+    health: 1.3, damage: 1.35, budget: 1.3, breather: 4, perkChance: 0.49, xpBonus: 1,
   },
 };
 
@@ -161,7 +170,7 @@ export const budgetForWave = (wave: number, difficulty: Difficulty): number =>
  * same length as the player's own firepower grows.
  */
 export const bossHealthForWave = (wave: number, playerLevel: number): number =>
-  400 + 70 * wave + 18 * playerLevel;
+  1200 + 130 * wave + 32 * playerLevel;
 
 /** Experience for killing the boss of a given wave. */
 export const bossXpForWave = (wave: number): number => 1200 + 240 * wave;

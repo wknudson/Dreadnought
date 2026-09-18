@@ -256,6 +256,6 @@ export function safeSpawnPoint(world: World, away: Vec2, minDistance: number): V
     if (d >= minDistance) return point;
   }
   // Fall back to the far corner from the player.
-  const h = world.arena.halfSize - 80;
-  return vec(away.x > 0 ? -h : h, away.y > 0 ? -h : h);
+  const h = world.inset(80);
+  return vec(away.x > 0 ? -h.x : h.x, away.y > 0 ? -h.y : h.y);
 }

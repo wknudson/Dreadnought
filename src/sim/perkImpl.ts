@@ -3,7 +3,9 @@ import type { World } from './world.ts';
 import { Entity, type EntityKind } from './entity.ts';
 import { Tank } from './tank.ts';
 import { Shape } from './shape.ts';
-import { Projectile } from './projectiles.ts';
+import { Projectile, raiseNecroDrone } from './projectiles.ts';
+import type { BarrelState } from './weapon.ts';
+import { getTank } from '../data/tanks.ts';
 import { applyDamage, integrate, maintainVelocity } from './physics.ts';
 import { COLORS } from '../data/colors.ts';
 import { vec, type Vec2 } from '../core/math.ts';
@@ -23,6 +25,8 @@ export class Pickup extends Entity {
 
   /** How much health it restores. */
   readonly heal: number;
+  /** What the renderer fills it with. */
+  color: string = COLORS.healthFill;
   /** How far it will be pulled from, which the magnet perk widens. */
   attractRadius = 220;
 
@@ -72,6 +76,67 @@ export class Pickup extends Entity {
       maintainVelocity(this, Math.atan2(dy, dx), 6 + 22 * pull);
     }
     integrate(this);
+  }
+}
+
+/**
+ * A mine dropped by the Minefield perk.
+ *
+ * Neutral, so the physics pass leaves it alone: a mine that traded contact
+ * damage would be a wall, and what makes it a mine is that it waits, arms, and
+ * then goes off all at once.
+ */
+export class Mine extends Entity {
+  override readonly kind: EntityKind = 'pickup';
+
+  color = '#FF9A52';
+
+  private age = 0;
+  private readonly blast: number;
+  private readonly power: number;
+  private readonly life: number;
+
+  /** Ticks before it will trigger, so one cannot be dropped onto something. */
+  private static readonly ARMING = 12;
+
+  constructor(at: Vec2, blast: number, damage: number, life: number) {
+    super();
+    this.pos = vec(at.x, at.y);
+    this.prevPos = vec(at.x, at.y);
+    this.radius = 11;
+    this.team = 'neutral';
+    this.hideHealthBar = true;
+    this.blast = blast;
+    this.power = damage;
+    this.life = life;
+  }
+
+  override update(world: World): void {
+    this.age++;
+    if (this.age > this.life) {
+      this.alive = false;
+      return;
+    }
+    if (this.age < Mine.ARMING) return;
+
+    const touching = world
+      .near(this.pos, this.radius + 24)
+      .some((e) => e.alive && e.team === 'enemy' && e.kind !== 'projectile');
+    if (!touching) return;
+
+    for (const e of world.near(this.pos, this.blast)) {
+      if (!e.alive || e.team !== 'enemy' || e.kind === 'projectile') continue;
+      applyDamage(world, e, this.power, this.owner);
+    }
+    world.addDeath({
+      pos: vec(this.pos.x, this.pos.y),
+      angle: 0,
+      radius: this.blast * 0.5,
+      color: this.color,
+      sides: 1,
+      def: null,
+    });
+    this.alive = false;
   }
 }
 
@@ -385,7 +450,350 @@ export const PERKS: readonly PerkDefinition[] = [
       },
     }),
   },
+
+  // --- Momentum: what builds up, and what you stand to lose ----------------
+  {
+    id: 'spree',
+    name: 'Killing Spree',
+    description: 'Every kill makes you fire faster. It fades if you stop killing.',
+    rarity: 'uncommon',
+    weight: 8,
+    maxStacks: 3,
+    available: (host) => host.player.def.barrels.length > 0,
+    create: (host) => {
+      // One countdown per kill rather than a single timer, so a spree tails off
+      // as the kills that built it age out instead of falling off a cliff.
+      const charges: number[] = [];
+      const WINDOW = 100;
+      const CAP = 10;
+      return {
+        id: 'spree',
+        stacks: 1,
+        modifyStats(stats) {
+          stats.reloadScale *= 1 - Math.min(0.55, 0.045 * this.stacks * charges.length);
+        },
+        onEnemyKilled() {
+          if (charges.length >= CAP) charges.shift();
+          charges.push(WINDOW);
+          host.player.refresh();
+        },
+        onTick() {
+          if (!charges.length) return;
+          let lost = false;
+          for (let i = charges.length - 1; i >= 0; i--) {
+            if (--charges[i]! <= 0) {
+              charges.splice(i, 1);
+              lost = true;
+            }
+          }
+          if (lost) host.player.refresh();
+        },
+      };
+    },
+  },
+  {
+    id: 'chain',
+    name: 'Chain Reaction',
+    description: 'Whatever you kill goes off, and whatever that kills goes off too.',
+    rarity: 'rare',
+    weight: 4,
+    maxStacks: 3,
+    create: (host) => ({
+      id: 'chain',
+      stacks: 1,
+      onEnemyKilled(victim, world) {
+        // The blast is credited to the player, so a chained kill scores and
+        // detonates in its own right. That is the whole appeal, and also the
+        // reason for a depth limit: a dense wave would otherwise recurse until
+        // the stack gave out.
+        if (chainDepth >= 3) return;
+        const blast = 90 + 30 * this.stacks;
+        const damage = victim.maxHealth * (0.3 + 0.1 * this.stacks);
+        chainDepth++;
+        try {
+          for (const e of world.near(victim.pos, blast)) {
+            if (!e.alive || e.kind === 'projectile') continue;
+            if (e.team === 'player' || e.team === 'neutral') continue;
+            applyDamage(world, e, damage, host.player);
+          }
+          world.addDeath({
+            pos: vec(victim.pos.x, victim.pos.y),
+            angle: 0,
+            radius: blast * 0.45,
+            color: '#FFB86B',
+            sides: 1,
+            def: null,
+          });
+        } finally {
+          chainDepth--;
+        }
+      },
+    }),
+  },
+  {
+    id: 'executioner',
+    name: 'Executioner',
+    description: 'Anything you hit that is nearly finished is finished there and then.',
+    rarity: 'uncommon',
+    weight: 7,
+    maxStacks: 3,
+    available: (host) => host.player.def.barrels.length > 0,
+    create: (host) => ({
+      id: 'executioner',
+      stacks: 1,
+      onProjectileHit(projectile, victim, world) {
+        if (!isOwnedBy(projectile, host.player)) return;
+        if (!victim.alive || victim.kind === 'projectile') return;
+        const threshold = victim.maxHealth * (0.08 + 0.04 * this.stacks);
+        if (victim.health > threshold) return;
+        applyDamage(world, victim, victim.health, host.player);
+      },
+    }),
+  },
+  {
+    id: 'gravedigger',
+    name: 'Gravedigger',
+    description: 'Every few kills raises a drone that fights at your side.',
+    rarity: 'rare',
+    weight: 4,
+    maxStacks: 3,
+    create: (host) => {
+      // Necromancer's spawner, borrowed for the drone it makes. The perk keeps
+      // its own barrel so its fleet is capped separately from anything the tank
+      // fields itself, and a Necromancer taking this gets both.
+      const barrel: BarrelState = {
+        def: getTank('necromancer').barrels[0]!,
+        cycle: 0,
+        primed: true,
+        recoilAnim: 0,
+        liveCount: 0,
+      };
+      let kills = 0;
+      return {
+        id: 'gravedigger',
+        stacks: 1,
+        onEnemyKilled(victim, world) {
+          if (++kills < Math.max(2, 6 - this.stacks)) return;
+          kills = 0;
+          if (barrel.liveCount >= 2 * this.stacks) return;
+          raiseNecroDrone(
+            world,
+            host.player,
+            host.player,
+            barrel,
+            host.player.points,
+            host.player.scale(),
+            victim.pos,
+            host.player.color,
+          );
+        },
+      };
+    },
+  },
+
+  // --- Bargains: everything here costs something ---------------------------
+  {
+    id: 'glass-cannon',
+    name: 'Glass Cannon',
+    description: 'Half again as much damage from every shot. A quarter less health.',
+    rarity: 'rare',
+    weight: 5,
+    maxStacks: 2,
+    available: (host) => host.player.def.barrels.length > 0,
+    create: () => ({
+      id: 'glass-cannon',
+      stacks: 1,
+      modifyStats(stats) {
+        stats.maxHealth *= Math.pow(0.75, this.stacks);
+      },
+      modifyProjectile(stats) {
+        stats.damage *= 1 + 0.5 * this.stacks;
+      },
+    }),
+  },
+  {
+    id: 'plating',
+    name: 'Heavy Plating',
+    description: 'A third more health, and you carry the weight of it.',
+    rarity: 'uncommon',
+    weight: 7,
+    maxStacks: 3,
+    create: () => ({
+      id: 'plating',
+      stacks: 1,
+      modifyStats(stats) {
+        stats.maxHealth *= 1 + 0.35 * this.stacks;
+        stats.acceleration *= Math.pow(0.88, this.stacks);
+      },
+    }),
+  },
+  {
+    id: 'last-stand',
+    name: 'Last Stand',
+    description: 'The closer you are to dying, the faster you fire.',
+    rarity: 'rare',
+    weight: 5,
+    maxStacks: 3,
+    available: (host) => host.player.def.barrels.length > 0,
+    create: (host) => {
+      // Quantised, because the derived stats are rebuilt on a change and a
+      // continuous reading of health would rebuild them every single tick.
+      let step = 0;
+      const stepOf = (): number => {
+        const tank = host.player;
+        const fraction = tank.maxHealth > 0 ? tank.health / tank.maxHealth : 1;
+        return Math.max(0, Math.min(8, Math.round((0.5 - fraction) * 16)));
+      };
+      return {
+        id: 'last-stand',
+        stacks: 1,
+        modifyStats(stats) {
+          stats.reloadScale *= 1 - (step / 8) * 0.15 * this.stacks;
+        },
+        onTick() {
+          const next = stepOf();
+          if (next === step) return;
+          step = next;
+          host.player.refresh();
+        },
+      };
+    },
+  },
+  {
+    id: 'hair-trigger',
+    name: 'Hair Trigger',
+    description: 'Fires a third faster, and nothing like as straight.',
+    rarity: 'uncommon',
+    weight: 7,
+    maxStacks: 2,
+    available: (host) => host.player.def.barrels.length > 0,
+    create: () => ({
+      id: 'hair-trigger',
+      stacks: 1,
+      modifyStats(stats) {
+        stats.reloadScale *= Math.pow(0.75, this.stacks);
+      },
+      modifyProjectile(stats) {
+        // The floor matters: a Sniper fires perfectly straight, and a bargain
+        // that costs it nothing is not a bargain.
+        stats.scatter = Math.max(stats.scatter, 0.05) * (1 + 1.2 * this.stacks);
+      },
+    }),
+  },
+
+  // --- The field: shots that keep going, and what is left behind -----------
+  {
+    id: 'split-shot',
+    name: 'Split Shot',
+    description: 'Your shots shatter on impact into smaller ones that carry on.',
+    rarity: 'rare',
+    weight: 5,
+    maxStacks: 2,
+    available: (host) => host.player.def.barrels.length > 0,
+    create: (host) => ({
+      id: 'split-shot',
+      stacks: 1,
+      modifyProjectile(_stats, mods) {
+        mods.split = Math.max(mods.split, 1 + this.stacks);
+      },
+      onProjectileHit(projectile) {
+        // Ending the shot here is what makes the perk visible. Left to its own
+        // devices a bullet outlives most of what it hits and dies against the
+        // far wall, where its children would be born outside the arena.
+        // Despawning scatters them, so the impact is all this has to arrange.
+        if (!isOwnedBy(projectile, host.player)) return;
+        const p = projectile as Projectile;
+        if (p.mods.split > 0) p.alive = false;
+      },
+    }),
+  },
+  {
+    id: 'boomerang',
+    name: 'Boomerang',
+    description: 'Your shots turn around and come back through whatever they missed.',
+    rarity: 'rare',
+    weight: 4,
+    maxStacks: 1,
+    available: (host) => host.player.def.barrels.length > 0,
+    create: () => ({
+      id: 'boomerang',
+      stacks: 1,
+      modifyProjectile(stats, mods) {
+        // Drones and traps live forever or to their own rules; only something
+        // with a timer has a halfway point to turn at.
+        if (!Number.isFinite(stats.lifeTicks)) return;
+        mods.returnAfter = Math.round(stats.lifeTicks * 0.45);
+        stats.lifeTicks *= 1.9;
+      },
+    }),
+  },
+  {
+    id: 'static-field',
+    name: 'Static Field',
+    description: 'Everything near you is slowly cooked.',
+    rarity: 'uncommon',
+    weight: 7,
+    maxStacks: 3,
+    create: (host) => {
+      let tick = 0;
+      return {
+        id: 'static-field',
+        stacks: 1,
+        onTick(world) {
+          tick++;
+          if (tick % 5) return;
+          const radius = 110 + 45 * this.stacks;
+          for (const e of world.near(host.player.pos, radius)) {
+            if (!e.alive || e.kind === 'projectile') continue;
+            if (e.team === 'player' || e.team === 'neutral') continue;
+            applyDamage(world, e, 1.2 * this.stacks, host.player);
+          }
+          // A pulse once a second, so its reach is seen rather than guessed at.
+          if (tick % 25 === 0) {
+            world.addDeath({
+              pos: vec(host.player.pos.x, host.player.pos.y),
+              angle: 0,
+              radius,
+              color: '#7FD1F5',
+              sides: 1,
+              def: null,
+            });
+          }
+        },
+      };
+    },
+  },
+  {
+    id: 'minefield',
+    name: 'Minefield',
+    description: 'You leave mines behind you as you drive.',
+    rarity: 'rare',
+    weight: 4,
+    maxStacks: 3,
+    create: (host) => {
+      let cooldown = 0;
+      return {
+        id: 'minefield',
+        stacks: 1,
+        onTick(world) {
+          if (--cooldown > 0) return;
+          cooldown = Math.max(30, 90 - 15 * this.stacks);
+          const mine = new Mine(
+            host.player.pos,
+            100 + 20 * this.stacks,
+            18 + 14 * this.stacks,
+            15 * 25,
+          );
+          mine.owner = host.player;
+          world.spawn(mine);
+        },
+      };
+    },
+  },
 ];
+
+/** Depth of the running Chain Reaction, so a chain cannot recurse without end. */
+let chainDepth = 0;
 
 const PERKS_BY_ID = new Map(PERKS.map((perk) => [perk.id, perk]));
 

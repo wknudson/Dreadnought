@@ -14,6 +14,7 @@ import { Run } from '../src/sim/run.ts';
 import { Tank } from '../src/sim/tank.ts';
 import { Shape } from '../src/sim/shape.ts';
 import { Bullet } from '../src/sim/projectiles.ts';
+import { squareArena } from '../src/sim/world.ts';
 import { getTank } from '../src/data/tanks.ts';
 import { TANKS } from '../src/data/tanks.ts';
 import { XP_TABLE, MAX_LEVEL, CARD_LEVELS, bodyRadius } from '../src/data/leveling.ts';
@@ -203,7 +204,7 @@ test('Triple Shot fires all three barrels at once', () => {
 
 test('bullets expire rather than leaving the arena', () => {
   const run = makeRun();
-  run.world.arena = { halfSize: 300, targetHalfSize: 300 };
+  run.world.arena = squareArena(300);
   run.player.pos = vec(0, 0);
   advance(run, 2, intent({ fire: true }));
   assert.equal(bulletsIn(run).length, 1);
@@ -274,7 +275,7 @@ test('a killed player ends the run once the explosion finishes', () => {
 test('a tank accelerates toward a terminal speed, not past it', () => {
   const run = makeRun();
   // Room to run: otherwise the far wall stops it before it tops out.
-  run.world.arena = { halfSize: 40000, targetHalfSize: 40000 };
+  run.world.arena = squareArena(40000);
   run.player.pos = vec(0, 0);
   const input = intent({ move: vec(1, 0) });
   advance(run, 120, input, 0);
@@ -292,7 +293,7 @@ test('a tank accelerates toward a terminal speed, not past it', () => {
 
 test('a tank reaches most of its speed within half a second', () => {
   const run = makeRun();
-  run.world.arena = { halfSize: 40000, targetHalfSize: 40000 };
+  run.world.arena = squareArena(40000);
   const input = intent({ move: vec(1, 0) });
   // Twelve ticks is a little under half a second at the 25 Hz simulation rate.
   advance(run, 12, input, 0);
@@ -303,7 +304,7 @@ test('a tank reaches most of its speed within half a second', () => {
 
 test('a tank coasts to a halt after the keys are released', () => {
   const run = makeRun();
-  run.world.arena = { halfSize: 40000, targetHalfSize: 40000 };
+  run.world.arena = squareArena(40000);
   advance(run, 40, intent({ move: vec(1, 0) }), 0);
   const top = Math.hypot(run.player.vel.x, run.player.vel.y);
   assert.ok(top > 20, `expected to be up to speed, got ${top}`);
@@ -320,7 +321,7 @@ test('a tank coasts to a halt after the keys are released', () => {
 
 test('the arena wall stops the player', () => {
   const run = makeRun();
-  run.world.arena = { halfSize: 500, targetHalfSize: 500 };
+  run.world.arena = squareArena(500);
   advance(run, 200, intent({ move: vec(1, 0) }), 0);
   assert.ok(
     run.player.pos.x <= 500 - run.player.radius + 0.001,
@@ -530,4 +531,140 @@ test('the stat column drops the stats a tank does not have', () => {
   assert.equal(keys.length, 4);
   assert.ok(!keys.includes('bulletDamage'));
   assert.ok(keys.includes('bodyDamage'));
+});
+
+// --- The dynamic perks -----------------------------------------------------
+
+/** A quiet run with the given perks taken, each stacked as asked. */
+function perked(ids: string[], stacks = 1): Run {
+  const run = quietRun();
+  for (const id of ids) {
+    const perk = PERKS.find((p) => p.id === id);
+    assert.ok(perk, `no perk called ${id}`);
+    for (let i = 0; i < stacks; i++) run.takeCard({ kind: 'perk', perk });
+  }
+  return run;
+}
+
+/** Squares parked in a row in front of the player, admitted to the world. */
+function squaresAhead(run: Run, count: number, gap = 60, distance = 150): void {
+  for (let i = 0; i < count; i++) {
+    run.world.spawn(
+      new Shape(
+        'square',
+        vec(run.player.pos.x + distance + i * gap, run.player.pos.y),
+        new Rng(i + 1),
+      ),
+    );
+  }
+  advance(run, 1);
+}
+
+const shapesLeft = (run: Run): number =>
+  run.world.entities.filter((e) => e instanceof Shape && e.alive).length;
+
+test('a split shot leaves children where it died', () => {
+  // One volley each, then off the trigger: with the tank firing throughout,
+  // both runs simply accumulate bullets and the comparison says nothing.
+  const volley = (perks: string[]): { fired: number; after: number } => {
+    const run = perked(perks);
+    // Far enough that the shot is on the field and counted well before it
+    // arrives: a square at close range is hit before the spawn queue has even
+    // admitted the bullet.
+    squaresAhead(run, 1, 60, 420);
+    let guard = 0;
+    while (!bulletsIn(run).length && guard++ < 20) advance(run, 1, intent({ fire: true }));
+    const fired = bulletsIn(run).length;
+    advance(run, 30);
+    return { fired, after: bulletsIn(run).length };
+  };
+
+  const plain = volley([]);
+  assert.equal(plain.after, plain.fired, 'an ordinary shot carries on through a square');
+
+  const split = volley(['split-shot']);
+  assert.ok(
+    split.after > split.fired,
+    `a splitting one should leave more behind, ${split.fired} became ${split.after}`,
+  );
+});
+
+test('a boomerang shot comes back past the tank', () => {
+  const run = perked(['boomerang']);
+  advance(run, 3, intent({ fire: true }));
+  const shot = bulletsIn(run)[0];
+  assert.ok(shot, 'the tank fired');
+
+  let furthest = 0;
+  for (let i = 0; i < 90 && shot.alive; i++) {
+    advance(run, 1);
+    furthest = Math.max(furthest, shot.pos.x - run.player.pos.x);
+  }
+  assert.ok(furthest > 500, `it should go out first, reached ${Math.round(furthest)}`);
+  assert.ok(
+    shot.pos.x - run.player.pos.x < furthest / 2,
+    'and be on its way back by the end of its life',
+  );
+});
+
+test('a chain reaction spreads without recursing forever', () => {
+  const run = perked(['chain'], 3);
+  // Packed tightly, so every blast is inside the next square's radius: the
+  // arrangement most likely to recurse without a depth limit.
+  for (let i = 0; i < 24; i++) {
+    run.world.spawn(
+      new Shape(
+        'square',
+        vec(run.player.pos.x + 200 + (i % 6) * 40, run.player.pos.y - 60 + Math.floor(i / 6) * 40),
+        new Rng(i + 1),
+      ),
+    );
+  }
+  advance(run, 1);
+  const before = shapesLeft(run);
+  assert.equal(before, 24);
+
+  advance(run, 150, intent({ fire: true }));
+  assert.ok(shapesLeft(run) < before / 2, 'the chain should carry through the pack');
+});
+
+test('a killing spree builds and then fades', () => {
+  const run = perked(['spree'], 3);
+  squaresAhead(run, 10, 45);
+
+  let best = 1;
+  for (let i = 0; i < 120; i++) {
+    advance(run, 1, intent({ fire: true }));
+    best = Math.min(best, run.player.derived.reloadScale);
+  }
+  assert.ok(best < 0.9, `kills should speed up the reload, best was ${best.toFixed(3)}`);
+
+  // Nothing left to kill: the charges age out and the rate returns to normal.
+  advance(run, 150);
+  assert.equal(run.player.derived.reloadScale, 1);
+});
+
+test('a bargain perk charges what it promises', () => {
+  const base = perked([]);
+  const glass = perked(['glass-cannon'], 2);
+  assert.ok(glass.player.maxHealth < base.player.maxHealth * 0.6, 'health is the price');
+
+  advance(base, 3, intent({ fire: true }));
+  advance(glass, 3, intent({ fire: true }));
+  const plainShot = bulletsIn(base)[0];
+  const glassShot = bulletsIn(glass)[0];
+  assert.ok(plainShot && glassShot);
+  assert.equal(glassShot.contactDamage, plainShot.contactDamage * 2, 'and damage is what it buys');
+});
+
+test('an executioner finishes what a shot would have left standing', () => {
+  const run = perked(['executioner'], 3);
+  squaresAhead(run, 1);
+  const square = run.world.entities.find((e) => e instanceof Shape && e.alive) as Shape;
+  assert.ok(square);
+
+  // Left on a sliver, which is exactly what the perk is for.
+  square.health = square.maxHealth * 0.1;
+  advance(run, 40, intent({ fire: true }));
+  assert.equal(square.alive, false);
 });

@@ -158,9 +158,9 @@ export class Shape extends Entity {
     integrate(this);
 
     // Bounce off the arena wall rather than sliding along it.
-    const limit = world.arena.halfSize - this.radius;
-    if (this.pos.x < -limit || this.pos.x > limit) this.heading = Math.PI - this.heading;
-    if (this.pos.y < -limit || this.pos.y > limit) this.heading = -this.heading;
+    const limit = world.inset(this.radius);
+    if (this.pos.x < -limit.x || this.pos.x > limit.x) this.heading = Math.PI - this.heading;
+    if (this.pos.y < -limit.y || this.pos.y > limit.y) this.heading = -this.heading;
     world.clampToArena(this);
 
     this.regenerate();

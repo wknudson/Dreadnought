@@ -42,9 +42,11 @@ export function drawWorld(
 
   drawGrid(ctx, camera);
   drawOutOfBounds(ctx, camera, world);
+  drawGhostBounds(ctx, world);
   for (const warning of warnings) drawWarning(ctx, warning);
 
   // Ordered so the things you need to read sit on top of the things you do not.
+  const orbs: Entity[] = [];
   const traps: Entity[] = [];
   const shapes: Entity[] = [];
   const projectiles: Entity[] = [];
@@ -66,9 +68,10 @@ export function drawWorld(
     else if (e instanceof Shape) shapes.push(e);
     else if (e instanceof Projectile) {
       (e.projectileKind === 'trap' ? traps : projectiles).push(e);
-    }
+    } else if (e.kind === 'pickup') orbs.push(e);
   }
 
+  for (const e of orbs) drawOrb(ctx, e, alpha);
   for (const e of traps) drawProjectile(ctx, e as Projectile, alpha);
   for (const e of shapes) drawShape(ctx, e as Shape, alpha);
   for (const e of projectiles) drawProjectile(ctx, e as Projectile, alpha);
@@ -81,6 +84,28 @@ export function drawWorld(
   for (const e of [...shapes, ...enemies, ...players]) drawHealthBar(ctx, e, alpha);
   for (const t of [...enemies, ...players]) drawName(ctx, t, alpha);
 
+  ctx.restore();
+}
+
+/**
+ * The small round things that are neither a tank, a shape nor a shot: health
+ * orbs and mines.
+ *
+ * They were drawn by nothing at all until this existed, which made a perk that
+ * drops healing on the field rather hard to play around.
+ */
+function drawOrb(ctx: CanvasRenderingContext2D, e: Entity, alpha: number): void {
+  const pos = lerpPos(e, alpha);
+  const color = (e as Entity & { color?: string }).color ?? COLORS.healthFill;
+  ctx.save();
+  ctx.globalAlpha = e.opacity;
+  ctx.fillStyle = color;
+  ctx.strokeStyle = outline(color);
+  ctx.lineWidth = Math.max(2, e.radius * 0.28);
+  ctx.beginPath();
+  ctx.arc(pos.x, pos.y, e.radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -134,21 +159,47 @@ function drawGrid(ctx: CanvasRenderingContext2D, camera: Camera): void {
   ctx.restore();
 }
 
+/**
+ * Outlines bounds that are coming but have not arrived.
+ *
+ * Drawn on the world rather than announced in words, because the decision it
+ * asks for is spatial: everything outside this rectangle is about to be swept
+ * away, and the player needs to know where to leave the swarm standing.
+ */
+function drawGhostBounds(ctx: CanvasRenderingContext2D, world: World): void {
+  const ghost = world.arena.ghost;
+  if (!ghost) return;
+  // A slow pulse, so it reads as pending rather than as scenery.
+  const pulse = 0.45 + 0.3 * Math.sin(world.tick * 0.22);
+  ctx.save();
+  ctx.globalAlpha = pulse;
+  ctx.strokeStyle = COLORS.enemyRed;
+  ctx.lineWidth = 8;
+  ctx.setLineDash([90, 60]);
+  ctx.strokeRect(-ghost.x, -ghost.y, ghost.x * 2, ghost.y * 2);
+  ctx.restore();
+}
+
 /** Shades everything beyond the arena, the way diep.io marks its border. */
 function drawOutOfBounds(ctx: CanvasRenderingContext2D, camera: Camera, world: World): void {
-  const h = world.arena.halfSize;
+  const hx = world.arena.half.x;
+  const hy = world.arena.half.y;
   const b = camera.visibleBounds(GRID_SIZE * 2);
   ctx.save();
   ctx.globalAlpha = COLORS.outOfBoundsAlpha;
   ctx.fillStyle = COLORS.outOfBounds;
   // Four bands around the playfield, clipped to what the camera can see.
-  if (b.minY < -h) ctx.fillRect(b.minX, b.minY, b.maxX - b.minX, Math.min(-h, b.maxY) - b.minY);
-  if (b.maxY > h) ctx.fillRect(b.minX, Math.max(h, b.minY), b.maxX - b.minX, b.maxY - Math.max(h, b.minY));
-  const midTop = Math.max(-h, b.minY);
-  const midBottom = Math.min(h, b.maxY);
+  if (b.minY < -hy) ctx.fillRect(b.minX, b.minY, b.maxX - b.minX, Math.min(-hy, b.maxY) - b.minY);
+  if (b.maxY > hy) {
+    ctx.fillRect(b.minX, Math.max(hy, b.minY), b.maxX - b.minX, b.maxY - Math.max(hy, b.minY));
+  }
+  const midTop = Math.max(-hy, b.minY);
+  const midBottom = Math.min(hy, b.maxY);
   if (midBottom > midTop) {
-    if (b.minX < -h) ctx.fillRect(b.minX, midTop, Math.min(-h, b.maxX) - b.minX, midBottom - midTop);
-    if (b.maxX > h) ctx.fillRect(Math.max(h, b.minX), midTop, b.maxX - Math.max(h, b.minX), midBottom - midTop);
+    if (b.minX < -hx) ctx.fillRect(b.minX, midTop, Math.min(-hx, b.maxX) - b.minX, midBottom - midTop);
+    if (b.maxX > hx) {
+      ctx.fillRect(Math.max(hx, b.minX), midTop, b.maxX - Math.max(hx, b.minX), midBottom - midTop);
+    }
   }
   ctx.restore();
 }

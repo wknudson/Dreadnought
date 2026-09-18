@@ -27,6 +27,10 @@ export class BossController implements Controller {
    * siege with no clock, so eventually they have to come to you.
    */
   private hunting = false;
+  /** True once the boss has dropped below half health. */
+  private enraged = false;
+  /** The heading a charger committed to, held for the length of one pass. */
+  private dashAngle = 0;
 
   constructor(boss: BossDefinition, clockwise: boolean) {
     this.boss = boss;
@@ -38,10 +42,34 @@ export class BossController implements Controller {
     this.hunting = true;
   }
 
+  /**
+   * Whether the boss is in its second half.
+   *
+   * Read by the run when it refreshes the boss, which is how the faster reload
+   * reaches the barrels: the derived block owns the period, so the only honest
+   * way to change it is to have it rebuilt.
+   */
+  get isEnraged(): boolean {
+    return this.enraged;
+  }
+
+  /** How much of its wanted distance an enraged boss still keeps. */
+  private closeIn(hold: number): number {
+    if (this.hunting) return 0;
+    return this.enraged ? hold * 0.55 : hold;
+  }
+
   tick(tank: Tank, world: World): TankIntent {
     this.phase++;
     const intent = idleIntent();
     const target = aiContext.target;
+
+    // Half health is the turn. Everything below reads it, and the refresh is
+    // what carries the shorter reload through to the barrels.
+    if (!this.enraged && tank.maxHealth > 0 && tank.health <= tank.maxHealth * 0.5) {
+      this.enraged = true;
+      tank.refresh();
+    }
 
     if (!target || !target.alive) {
       // Patrol the middle while there is nobody to fight.
@@ -65,20 +93,27 @@ export class BossController implements Controller {
     switch (this.boss.behaviour) {
       case 'circler': {
         // Comes on steadily and speeds up the further away you get, so running
-        // away buys time but not escape.
+        // away buys time but not escape. Enraged it stops circling politely at
+        // arm's length and keeps coming.
         const urgency = Math.min(1, distance / 1400);
-        const heading = distance > 260 ? bearing : bearing + (Math.PI / 2) * this.orbit;
-        intent.moveX = Math.cos(heading) * (0.5 + 0.5 * urgency);
-        intent.moveY = Math.sin(heading) * (0.5 + 0.5 * urgency);
+        const heading = distance > this.closeIn(260) ? bearing : bearing + (Math.PI / 2) * this.orbit;
+        const pace = (this.enraged ? 0.75 : 0.5) + 0.5 * urgency;
+        intent.moveX = Math.cos(heading) * pace;
+        intent.moveY = Math.sin(heading) * pace;
         break;
       }
 
       case 'summoner': {
         // Keeps its distance and lets the swarm do the work, but every few
         // seconds it throws the whole fleet forward at once.
-        const diving = this.phase % 150 < 50;
-        intent.fire = diving;
-        const hold = this.hunting ? 0 : 900;
+        //
+        // The pause between dives used to be two thirds of the fight, and a
+        // swarm left to its own judgement is a swarm not attacking: most of the
+        // fight was the player shooting an idle fleet. It dives for half the
+        // cycle now, and once enraged it simply never calls them back.
+        const diving = this.phase % 150 < 75;
+        intent.fire = diving || this.enraged;
+        const hold = this.closeIn(900);
         const heading = distance < hold ? bearing + Math.PI : bearing;
         const urgency = Math.abs(distance - hold) > 200 ? 0.5 : 0.15;
         intent.moveX = Math.cos(heading) * urgency;
@@ -89,27 +124,52 @@ export class BossController implements Controller {
       case 'fortress': {
         // Crawls forward, spinning constantly so its launchers lay a moving
         // shell of traps rather than a line.
-        intent.aimAngle = tank.angle + 0.035;
-        const reach = this.hunting ? 0 : 400;
+        intent.aimAngle = tank.angle + (this.enraged ? 0.055 : 0.035);
+        const reach = this.closeIn(400);
         const heading = distance > reach ? bearing : bearing + (Math.PI / 2) * this.orbit;
-        intent.moveX = Math.cos(heading) * (this.hunting ? 0.75 : 0.35);
-        intent.moveY = Math.sin(heading) * (this.hunting ? 0.75 : 0.35);
+        const pace = this.hunting ? 0.75 : this.enraged ? 0.6 : 0.35;
+        intent.moveX = Math.cos(heading) * pace;
+        intent.moveY = Math.sin(heading) * pace;
         break;
       }
 
       case 'charger': {
-        // Runs you down, overshoots, turns around and does it again.
-        const overshooting = this.phase % 120 > 85;
-        const heading = overshooting ? bearing + Math.PI * 0.75 : bearing;
-        intent.moveX = Math.cos(heading);
-        intent.moveY = Math.sin(heading);
+        // A pass, not a walk: line up, commit to a heading and cross through,
+        // then pull away and turn for another run.
+        //
+        // Driving straight at the player and staying there was the shortest
+        // fight in the game by a distance. A boss parked inside their guns is
+        // a stationary target that happens to be touching them, and they win
+        // that trade every time. Committing to the heading is what makes it a
+        // charge: it can be sidestepped, and it has to come round again.
+        const period = this.enraged ? 80 : 120;
+        const step = this.phase % period;
+        const winding = step < period * 0.2;
+        const dashing = step < period * 0.6;
+
+        if (winding) {
+          // Back off to give the run some road, and keep facing the player.
+          this.dashAngle = bearing;
+          intent.moveX = Math.cos(bearing + Math.PI) * 0.6;
+          intent.moveY = Math.sin(bearing + Math.PI) * 0.6;
+        } else if (dashing) {
+          // Committed. It goes where it was pointing, through and past.
+          intent.moveX = Math.cos(this.dashAngle);
+          intent.moveY = Math.sin(this.dashAngle);
+        } else {
+          // Swing wide rather than reverse on the spot, so the next pass comes
+          // in from somewhere new.
+          const away = this.dashAngle + (Math.PI / 2) * this.orbit;
+          intent.moveX = Math.cos(away) * 0.8;
+          intent.moveY = Math.sin(away) * 0.8;
+        }
         intent.aimAngle = bearing;
         break;
       }
 
       case 'sieger': {
         // Holds well back and sends drones, backing off if you close.
-        const hold = this.hunting ? 0 : 1100;
+        const hold = this.closeIn(1100);
         const heading = distance < hold ? bearing + Math.PI : bearing;
         const urgency = distance < hold * 0.7 ? 0.8 : 0.3;
         intent.moveX = Math.cos(heading) * urgency;
@@ -119,8 +179,8 @@ export class BossController implements Controller {
     }
 
     // Keep a boss from grinding along the wall where it cannot be fought.
-    const limit = world.arena.halfSize - tank.radius - 40;
-    if (Math.abs(tank.pos.x) > limit || Math.abs(tank.pos.y) > limit) {
+    const limit = world.inset(tank.radius + 40);
+    if (Math.abs(tank.pos.x) > limit.x || Math.abs(tank.pos.y) > limit.y) {
       const inward = Math.atan2(-tank.pos.y, -tank.pos.x);
       intent.moveX = Math.cos(inward);
       intent.moveY = Math.sin(inward);

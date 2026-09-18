@@ -31,6 +31,8 @@ import {
 import { BOSS_ORDER, getBoss } from '../src/data/bosses.ts';
 import { dealCards, HAND_SIZE } from '../src/data/cards.ts';
 import { PERKS } from '../src/sim/perkImpl.ts';
+import { Drone } from '../src/sim/projectiles.ts';
+import { deriveProjectileStats } from '../src/sim/stats.ts';
 import { getTank, DEFAULT_STAT_CAP } from '../src/data/tanks.ts';
 import { STAT_ORDER } from '../src/data/schema.ts';
 import type { Intent } from '../src/core/input.ts';
@@ -258,6 +260,29 @@ test('a boss wave puts a boss on the field', () => {
   assert.equal(run.bossName, getBoss(bossFor(BOSS_INTERVAL)!).name);
 });
 
+test('a boss enrages below half health without losing its scaled health', () => {
+  const run = makeRun();
+  run.waves.jumpTo(BOSS_INTERVAL);
+  advance(run, 120);
+  const boss = run.world.entities.find((e): e is Tank => e instanceof Tank && e.isBoss);
+  assert.ok(boss, 'the boss should have arrived');
+
+  const full = boss.maxHealth;
+  const calmReload = boss.reloadScale();
+
+  // A boss's health is the wave's number, not the level forty-five formula, and
+  // enraging rebuilds the derived block. If that rebuild drops the wave's
+  // number the boss loses most of its health the moment it is wounded.
+  boss.health = full * 0.4;
+  advance(run, 2);
+
+  assert.equal(boss.maxHealth, full, 'enraging must not rewrite the health pool');
+  assert.ok(
+    boss.reloadScale() < calmReload,
+    `an enraged boss should reload faster, ${boss.reloadScale()} against ${calmReload}`,
+  );
+});
+
 // --- Cards -----------------------------------------------------------------
 
 test('a level-up deals three cards', () => {
@@ -411,3 +436,115 @@ function findPerk(id: string): (typeof PERKS)[number] {
   if (!perk) throw new Error(`no perk called ${id}`);
   return perk;
 }
+
+/** Puts a drone belonging to the boss at a world position. */
+function spawnDroneAt(run: Run, owner: Tank, at: { x: number; y: number }): Drone {
+  const stats = deriveProjectileStats(owner.stats(), owner.def.barrels[0]!, 1);
+  const drone = new Drone(vec(at.x, at.y), 0, stats, 'drone', null, null, false);
+  drone.team = 'enemy';
+  drone.owner = owner;
+  run.world.spawn(drone);
+  advance(run, 1);
+  return drone;
+}
+
+// --- The last fight --------------------------------------------------------
+
+/** A run parked on the final wave with its boss on the field. */
+function atTheOverlord(seed = 5): { run: Run; boss: Tank } {
+  const run = makeRun(seed);
+  // A level-one tank dropped in front of the wave-25 boss dies before the
+  // second phase, and these tests are about the arena, not about surviving it.
+  run.player.incomingDamageScale = 0;
+  run.waves.jumpTo(FINAL_WAVE);
+  // The boss arrives behind a warning ring rather than immediately.
+  for (let i = 0; i < 400 && !findBoss(run); i++) advance(run, 1);
+  const boss = findBoss(run);
+  assert.ok(boss, 'the final boss never took the field');
+  return { run, boss };
+}
+
+const findBoss = (run: Run): Tank | undefined =>
+  run.world.entities.find((e): e is Tank => e instanceof Tank && e.isBoss && e.alive);
+
+/** Drives the fight until the boss is at the given fraction of its health. */
+function wearDown(run: Run, boss: Tank, fraction: number): void {
+  boss.health = boss.maxHealth * fraction;
+  advance(run, 1);
+}
+
+test('the last fight opens in a corridor rather than a square', () => {
+  const { run } = atTheOverlord();
+  advance(run, 60);
+  const { half, targetHalf } = run.world.arena;
+  assert.ok(targetHalf.x > targetHalf.y * 3, `expected a hall, got ${targetHalf.x}x${targetHalf.y}`);
+  assert.ok(half.x > half.y, 'the border should already be moving toward it');
+});
+
+test('every other boss wave keeps its square', () => {
+  const run = makeRun();
+  run.waves.jumpTo(FINAL_WAVE - BOSS_INTERVAL);
+  for (let i = 0; i < 400 && !findBoss(run); i++) advance(run, 1);
+  advance(run, 60);
+  const { targetHalf } = run.world.arena;
+  assert.equal(targetHalf.x, targetHalf.y, 'only the Overlord reshapes the arena');
+});
+
+test('the walls are shown before they land', () => {
+  const { run, boss } = atTheOverlord();
+  advance(run, 60);
+  const quiet = run.world.arena.ghost;
+  assert.equal(quiet, null, 'nothing pending yet');
+
+  wearDown(run, boss, 0.6);
+  const ghost = run.world.arena.ghost;
+  assert.ok(ghost, 'crossing the threshold should telegraph the next shape');
+  assert.ok(ghost.y > ghost.x * 3, 'the telegraph should show the well, not the hall');
+
+  // The shape must not change while the warning is still up.
+  const before = { ...run.world.arena.targetHalf };
+  advance(run, 10);
+  assert.deepEqual({ ...run.world.arena.targetHalf }, before, 'the walls moved early');
+});
+
+test('the walls cull the swarm but never the player or the boss', () => {
+  const { run, boss } = atTheOverlord();
+  advance(run, 60);
+
+  // One drone parked where the well will be, one parked far outside it.
+  const spared = spawnDroneAt(run, boss, vec(0, 0));
+  const doomed = spawnDroneAt(run, boss, vec(run.world.arena.targetHalf.x * 0.95, 0));
+
+  wearDown(run, boss, 0.6);
+  advance(run, TICKS_PER_SECOND * 4);
+
+  assert.ok(spared.alive, 'a drone inside the new bounds should survive');
+  assert.ok(!doomed.alive, 'a drone the walls swept over should not');
+  assert.ok(boss.alive, 'the boss is shoved, not culled');
+  assert.ok(run.player.alive, 'the player is never culled');
+
+  const bounds = run.world.arena.targetHalf;
+  assert.ok(Math.abs(boss.pos.x) <= bounds.x, `boss left outside at ${boss.pos.x}`);
+  assert.ok(Math.abs(boss.pos.y) <= bounds.y, `boss left outside at ${boss.pos.y}`);
+});
+
+test('the vise closes on its own clock and stops at a floor', () => {
+  const { run, boss } = atTheOverlord();
+  advance(run, 60);
+  wearDown(run, boss, 0.6);
+  advance(run, TICKS_PER_SECOND * 4);
+  wearDown(run, boss, 0.3);
+  advance(run, TICKS_PER_SECOND * 4);
+
+  const opened = { ...run.world.arena.targetHalf };
+  assert.equal(opened.x, opened.y, 'the vise is square');
+
+  advance(run, TICKS_PER_SECOND * 30);
+  const closing = run.world.arena.targetHalf;
+  assert.ok(closing.x < opened.x, `the vise should be closing, ${closing.x} v ${opened.x}`);
+
+  // Long past the end of its travel it must have stopped somewhere survivable.
+  advance(run, TICKS_PER_SECOND * 60);
+  const floor = run.world.arena.targetHalf;
+  assert.ok(floor.x > boss.radius * 4, `the vise closed too far, ${floor.x} v ${boss.radius}`);
+});

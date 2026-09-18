@@ -137,11 +137,15 @@ function drawMinimap(
   const narrow = width < 640;
   const y = narrow ? Math.round(74 * scale) : height - size - pad;
 
-  const half = run.world.arena.halfSize;
-  const toMap = (wx: number, wy: number): [number, number] => [
-    x + ((wx + half) / (half * 2)) * size,
-    y + ((wy + half) / (half * 2)) * size,
-  ];
+  // The frame stays square and the arena is letterboxed inside it, scaled by
+  // its longer axis. A rectangle drawn to fill the frame would read as a square
+  // and hide the one thing the shape is there to tell you.
+  const half = run.world.arena.half;
+  const span = Math.max(half.x, half.y, 1);
+  const unit = size / (span * 2);
+  const cx = x + size / 2;
+  const cy = y + size / 2;
+  const toMap = (wx: number, wy: number): [number, number] => [cx + wx * unit, cy + wy * unit];
 
   ctx.save();
   ctx.globalAlpha = 0.78;
@@ -157,6 +161,13 @@ function drawMinimap(
   ctx.beginPath();
   ctx.rect(x, y, size, size);
   ctx.clip();
+  ctx.globalAlpha = 1;
+
+  // The playfield itself, so a border that is moving can be seen to move.
+  ctx.globalAlpha = 0.5;
+  ctx.strokeStyle = COLORS.border;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(cx - half.x * unit, cy - half.y * unit, half.x * 2 * unit, half.y * 2 * unit);
   ctx.globalAlpha = 1;
 
   for (const e of run.world.entities) {

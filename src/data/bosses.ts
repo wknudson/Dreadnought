@@ -23,8 +23,16 @@ export interface BossDefinition {
   name: string;
   /** The tank definition the boss fights with. */
   def: TankDefinition;
-  /** Health before difficulty scaling. */
-  health: number;
+  /**
+   * How much of a wave's boss health this one gets.
+   *
+   * The five used to carry diep.io's flat three thousand, identical and unread,
+   * with the wave formula deciding everything. They do not all die at the same
+   * rate for it: the player picks the range, so a wide slow trap layer takes
+   * punishment a charger crossing the arena never stands still for. These are
+   * measured against how long each fight actually ran, not guessed.
+   */
+  toughness: number;
   /** Contact damage per tick. */
   bodyDamage: number;
   /** Experience for killing it. */
@@ -188,7 +196,7 @@ function buildBosses(): Record<BossId, BossDefinition> {
       def: bossTank('Guardian of the Pentagons', 3, 3.2, COLORS.crasher, [
         spawner(Math.PI, 8, 1.2),
       ]),
-      health: 3000,
+      toughness: 1.25,
       bodyDamage: 14,
       xp: 3000,
       behaviour: 'circler',
@@ -204,7 +212,7 @@ function buildBosses(): Record<BossId, BossDefinition> {
         spawner(Math.PI, 4, 2),
         spawner(-HALF, 4, 2),
       ]),
-      health: 3000,
+      toughness: 0.95,
       bodyDamage: 14,
       xp: 3000,
       behaviour: 'summoner',
@@ -222,7 +230,7 @@ function buildBosses(): Record<BossId, BossDefinition> {
         [trapLauncher(0), trapLauncher((Math.PI * 2) / 3), trapLauncher((Math.PI * 4) / 3)],
         [autoTurret(0, 0.62), autoTurret((Math.PI * 2) / 3, 0.62), autoTurret((Math.PI * 4) / 3, 0.62)],
       ),
-      health: 3000,
+      toughness: 1.6,
       bodyDamage: 14,
       xp: 3000,
       behaviour: 'fortress',
@@ -233,7 +241,7 @@ function buildBosses(): Record<BossId, BossDefinition> {
       id: 'fallen-booster',
       name: 'Fallen Booster',
       def: fallenBooster,
-      health: 3000,
+      toughness: 1.1,
       bodyDamage: 14,
       xp: 3000,
       behaviour: 'charger',
@@ -244,7 +252,7 @@ function buildBosses(): Record<BossId, BossDefinition> {
       id: 'fallen-overlord',
       name: 'Fallen Overlord',
       def: fallenOverlord,
-      health: 3000,
+      toughness: 0.8,
       bodyDamage: 14,
       xp: 3000,
       behaviour: 'sieger',

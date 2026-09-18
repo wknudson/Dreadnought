@@ -26,12 +26,20 @@ import type { Entity } from './entity.ts';
 import { vec, type Vec2 } from '../core/math.ts';
 import { TICKS_PER_SECOND } from '../core/loop.ts';
 import { DEFAULT_ARENA_HALF_SIZE } from './world.ts';
+import { FinaleDirector } from './finale.ts';
 
 /** What the director is doing right now. */
 export type WavePhase = 'idle' | 'incoming' | 'fighting' | 'breather' | 'won';
 
 /** Ticks a warning ring shows before whatever it marks arrives. */
 const WARNING_TICKS = 25;
+/**
+ * What an enraged boss multiplies its reload period by.
+ *
+ * A boss below half health fires roughly a third faster, which is most of what
+ * makes the second half of the fight read differently from the first.
+ */
+const ENRAGE_RELOAD = 0.7;
 /** How close to the player an enemy may spawn. */
 const MIN_SPAWN_DISTANCE = 700;
 
@@ -72,6 +80,13 @@ export class WaveDirector {
   breatherTicks = 0;
   /** The boss of the current wave, while it lives. */
   bossName: string | null = null;
+  /**
+   * A one-off line for the banner, with a counter so a repeat reads as new.
+   *
+   * The wave banner is driven by watching the wave number change, which cannot
+   * say anything twice inside one wave. The last fight needs to say five things.
+   */
+  banner: { text: string; id: number } = { text: '', id: 0 };
 
   private readonly world: World;
   private readonly rng: Rng;
@@ -85,6 +100,8 @@ export class WaveDirector {
   private static readonly PATIENCE_TICKS = TICKS_PER_SECOND * 40;
   private readonly pending: PendingSpawn[] = [];
   private current: WaveDef | null = null;
+  /** Runs the authored last fight while the Fallen Overlord stands. */
+  private finale: FinaleDirector | null = null;
   /** Groups of the current wave not yet released. */
   private queue: SpawnGroup[] = [];
   private waveTicks = 0;
@@ -166,6 +183,8 @@ export class WaveDirector {
       p.spawn(p.at);
     }
 
+    if (this.finale) this.tickFinale();
+
     switch (this.phase) {
       case 'incoming':
       case 'fighting':
@@ -206,12 +225,19 @@ export class WaveDirector {
     this.wave = index;
     this.waveTicks = 0;
     this.tracked.clear();
+
+    // A wave that begins while the last fight is still running means the run
+    // was jumped rather than played, and the arena must not keep its shape.
+    if (this.finale) {
+      this.finale.release();
+      this.finale = null;
+    }
     this.current = generateWave(index, this.difficulty, this.rng);
     this.queue = [...this.current.groups];
     this.phase = 'incoming';
 
     // The arena widens as the run goes on, so late waves are not a scrum.
-    this.world.arena.targetHalfSize = arenaSizeForWave(index, this.viewReference);
+    this.world.arena.targetHalf = this.arenaTarget(arenaSizeForWave(index, this.viewReference));
 
     const boss = this.current.boss;
     this.bossName = boss ? getBoss(boss).name : null;
@@ -337,10 +363,22 @@ export class WaveDirector {
     // maximum, a wave-five boss's escort does more damage per tick than the
     // player has health.
     tank.points = buildStatsFor('commander', Math.round(45 * threat));
+
+    // A boss's health and body damage are the wave's numbers, not the level
+    // forty-five formula, and the derived block is rebuilt from that formula on
+    // every refresh. Putting them here rather than assigning them afterwards is
+    // what makes a refresh survivable, which is what the enrage needs: dropping
+    // below half health rebuilds the block to pick up the shorter reload.
+    const bossHealth =
+      bossHealthForWave(this.wave, this.playerLevel) * boss.toughness * this.difficulty.health;
+    const bossBodyDamage = boss.bodyDamage * threat * this.difficulty.damage;
+    tank.statModifier = (stats) => {
+      stats.maxHealth = bossHealth;
+      stats.bodyDamage = bossBodyDamage;
+      if (controller.isEnraged) stats.reloadScale *= ENRAGE_RELOAD;
+    };
     tank.refresh();
-    tank.maxHealth = bossHealthForWave(this.wave, this.playerLevel) * this.difficulty.health;
     tank.health = tank.maxHealth;
-    tank.contactDamage = boss.bodyDamage * threat * this.difficulty.damage;
     tank.isBoss = true;
     tank.bossXp = bossXpForWave(this.wave);
 
@@ -348,6 +386,34 @@ export class WaveDirector {
     tank.prevPos = vec(at.x, at.y);
     this.world.spawn(tank);
     this.tracked.add(tank);
+
+    // The run's last boss brings the arena with it.
+    if (this.wave >= FINAL_WAVE) this.finale = new FinaleDirector(this.world, tank);
+  }
+
+  /**
+   * The bounds the current wave wants, given what the camera can show.
+   *
+   * A plain square unless the last fight is reshaping the arena, and the single
+   * place anything is allowed to decide that. The run calls it on a resize too,
+   * so a window dragged mid-fight cannot hand the Overlord its square back.
+   */
+  arenaTarget(nominal: number): Vec2 {
+    return this.finale?.arenaTarget(nominal) ?? vec(nominal, nominal);
+  }
+
+  /** Advances the last fight and forwards anything it wants announced. */
+  private tickFinale(): void {
+    const finale = this.finale!;
+    finale.tick(arenaSizeForWave(this.wave, this.viewReference));
+    if (finale.announcement) {
+      this.banner = { text: finale.announcement, id: this.banner.id + 1 };
+      finale.announcement = null;
+    }
+    if (finale.finished) {
+      finale.release();
+      this.finale = null;
+    }
   }
 
   /** Stops tracking something that died, so a cleared wave is noticed. */

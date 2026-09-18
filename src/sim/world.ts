@@ -117,11 +117,46 @@ export const DEFAULT_ARENA_HALF_SIZE = 1300;
 export const ARENA_GROWTH_PER_STAGE = 420;
 
 export interface Arena {
-  /** Half the arena's width. The playfield spans -halfSize to +halfSize on both axes. */
-  halfSize: number;
-  /** Target used while the border animates outward after a boss. */
-  targetHalfSize: number;
+  /**
+   * Half the arena's extent on each axis. The playfield spans -half to +half.
+   *
+   * Two numbers rather than one, because the arena is not required to be square.
+   * Everything the game ships today builds a square, but a wave that squeezes
+   * one axis into a corridor while leaving the other alone needs somewhere to
+   * say so, and retrofitting that into a scalar means finding every place the
+   * squareness was assumed rather than stated.
+   */
+  half: Vec2;
+  /** Target used while the border animates toward a new size or shape. */
+  targetHalf: Vec2;
+  /**
+   * How much of the remaining gap the border closes each tick.
+   *
+   * A single constant served while the only thing that moved the border was a
+   * boss falling, where a slow drift outward is exactly right. A wall that is
+   * closing on you is a different event and has to be able to say so.
+   */
+  ease: number;
+  /**
+   * Bounds about to be imposed, drawn as a warning while they are still coming.
+   *
+   * Without this a reshape is a lottery. Showing where the walls will land is
+   * what turns the moment into a decision: everything outside that rectangle is
+   * about to be swept away, including things you put there on purpose.
+   */
+  ghost: Vec2 | null;
 }
+
+/** How much of the gap the border closes per tick when nothing says otherwise. */
+export const ARENA_EASE = 0.02;
+
+/** An arena that is square, which is what every wave currently asks for. */
+export const squareArena = (half: number): Arena => ({
+  half: vec(half, half),
+  targetHalf: vec(half, half),
+  ease: ARENA_EASE,
+  ghost: null,
+});
 
 /**
  * The simulation. Owns every entity, the arena bounds, and the tick order.
@@ -132,7 +167,7 @@ export class World {
   readonly hash = new SpatialHash();
   readonly deaths: DeathEffect[] = [];
 
-  arena: Arena = { halfSize: DEFAULT_ARENA_HALF_SIZE, targetHalfSize: DEFAULT_ARENA_HALF_SIZE };
+  arena: Arena = squareArena(DEFAULT_ARENA_HALF_SIZE);
 
   /** Ticks elapsed since the world was created. */
   tick = 0;
@@ -162,45 +197,55 @@ export class World {
     this.deaths.push({ ...effect, age: 0, prevAge: 0 });
   }
 
+  /**
+   * The arena's bounds pulled in by the same amount on both axes.
+   *
+   * Several systems want "how far out may this go", and each one doing its own
+   * subtraction is exactly where an assumption about squareness creeps back in.
+   */
+  inset(amount: number): Vec2 {
+    return vec(Math.max(0, this.arena.half.x - amount), Math.max(0, this.arena.half.y - amount));
+  }
+
   /** Keeps a circle inside the arena, zeroing the velocity component that would leave. */
   clampToArena(e: Entity): void {
-    const limit = this.arena.halfSize - e.radius;
-    if (e.pos.x < -limit) {
-      e.pos.x = -limit;
+    const limit = this.inset(e.radius);
+    if (e.pos.x < -limit.x) {
+      e.pos.x = -limit.x;
       if (e.vel.x < 0) e.vel.x = 0;
-    } else if (e.pos.x > limit) {
-      e.pos.x = limit;
+    } else if (e.pos.x > limit.x) {
+      e.pos.x = limit.x;
       if (e.vel.x > 0) e.vel.x = 0;
     }
-    if (e.pos.y < -limit) {
-      e.pos.y = -limit;
+    if (e.pos.y < -limit.y) {
+      e.pos.y = -limit.y;
       if (e.vel.y < 0) e.vel.y = 0;
-    } else if (e.pos.y > limit) {
-      e.pos.y = limit;
+    } else if (e.pos.y > limit.y) {
+      e.pos.y = limit.y;
       if (e.vel.y > 0) e.vel.y = 0;
     }
   }
 
-  /** True when the point lies outside the playable square. */
+  /** True when the point lies outside the playfield. */
   outsideArena(pos: Vec2, margin = 0): boolean {
-    const limit = this.arena.halfSize + margin;
-    return Math.abs(pos.x) > limit || Math.abs(pos.y) > limit;
+    return Math.abs(pos.x) > this.arena.half.x + margin || Math.abs(pos.y) > this.arena.half.y + margin;
   }
 
-  /** A random point on the arena perimeter, inset slightly so nothing spawns in the wall. */
+  /**
+   * A random point on the arena perimeter, inset slightly so nothing spawns in the wall.
+   *
+   * The edge is chosen by length rather than by count: on a long thin arena the
+   * two short ends would otherwise take half of everything that spawns, and a
+   * wave would arrive down the corridor instead of around the player.
+   */
   randomEdgePoint(inset = 60): Vec2 {
-    const h = this.arena.halfSize - inset;
-    const t = this.rng.range(-h, h);
-    switch (this.rng.int(0, 3)) {
-      case 0:
-        return vec(t, -h);
-      case 1:
-        return vec(t, h);
-      case 2:
-        return vec(-h, t);
-      default:
-        return vec(h, t);
+    const h = this.inset(inset);
+    const span = h.x + h.y;
+    if (this.rng.bool(span > 0 ? h.x / span : 0.5)) {
+      // A top or bottom edge, which runs along x.
+      return vec(this.rng.range(-h.x, h.x), this.rng.bool() ? -h.y : h.y);
     }
+    return vec(this.rng.bool() ? -h.x : h.x, this.rng.range(-h.y, h.y));
   }
 
   private admitSpawns(): void {

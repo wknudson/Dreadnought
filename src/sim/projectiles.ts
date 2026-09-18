@@ -20,6 +20,8 @@ export interface ProjectileMods {
   split: number;
   /** Radius of an explosion on impact. */
   explodeRadius: number;
+  /** Ticks before the shot turns around and comes back. Zero never does. */
+  returnAfter: number;
 }
 
 export const noMods = (): ProjectileMods => ({
@@ -28,6 +30,7 @@ export const noMods = (): ProjectileMods => ({
   homing: 0,
   split: 0,
   explodeRadius: 0,
+  returnAfter: 0,
 });
 
 /** What a drone is being told to do this tick. */
@@ -168,6 +171,15 @@ export class Bullet extends Projectile {
       return;
     }
 
+    // A returning shot simply turns around once. It keeps its speed and its
+    // remaining life, so the way back is the way out in reverse, and everything
+    // it passed on the way out gets a second chance to be hit.
+    if (this.mods.returnAfter > 0 && this.age === this.mods.returnAfter) {
+      this.angle = wrapAngle(this.angle + Math.PI);
+      this.vel.x = -this.vel.x;
+      this.vel.y = -this.vel.y;
+    }
+
     if (this.mods.homing > 0) this.steerTowardTarget(world);
 
     maintainVelocity(this, this.angle, this.cruise);
@@ -185,16 +197,60 @@ export class Bullet extends Projectile {
     this.angle += Math.max(-this.mods.homing, Math.min(this.mods.homing, delta));
   }
 
+  /**
+   * Breaks up into smaller shots rather than simply going out.
+   *
+   * Hung on the despawn rather than on the timer because a shot almost never
+   * reaches its timer: it crosses the arena in less time than it has, so the
+   * deaths that matter are the ones against something. A shot that left the
+   * arena is excluded, since its children would be born outside it and die on
+   * their first tick.
+   *
+   * The children carry none of the parent's splitting, so no chain of them is
+   * possible however far the perk is stacked; stacking widens the fan instead.
+   */
+  override onDespawn(world: World): void {
+    const count = this.mods.split;
+    if (count > 0 && !world.outsideArena(this.pos, this.radius)) {
+      const spread = Math.PI / 5;
+      for (let i = 0; i < count; i++) {
+        const offset = count === 1 ? 0 : spread * (i / (count - 1) - 0.5) * 2;
+        const child = new Bullet(
+          this.pos,
+          this.angle + offset,
+          {
+            damage: this.contactDamage * 0.5,
+            health: this.maxHealth * 0.5,
+            acceleration: this.cruise,
+            initialSpeed: this.cruise,
+            radius: this.radius * 0.6,
+            lifeTicks: Math.max(6, this.lifeTicks * 0.4),
+            absorbtionFactor: this.absorbtionFactor,
+            scatter: 0,
+          },
+          'bullet',
+          null,
+        );
+        child.team = this.team;
+        child.owner = this.owner;
+        child.deathColor = this.deathColor;
+        child.pushFactor = this.pushFactor * 0.5;
+        world.spawn(child);
+      }
+    }
+    super.onDespawn(world);
+  }
+
   private bounceOffWalls(world: World): void {
-    const limit = world.arena.halfSize - this.radius;
+    const limit = world.inset(this.radius);
     let bounced = false;
-    if (this.pos.x < -limit || this.pos.x > limit) {
-      this.pos.x = Math.max(-limit, Math.min(limit, this.pos.x));
+    if (this.pos.x < -limit.x || this.pos.x > limit.x) {
+      this.pos.x = Math.max(-limit.x, Math.min(limit.x, this.pos.x));
       this.vel.x *= -1;
       bounced = true;
     }
-    if (this.pos.y < -limit || this.pos.y > limit) {
-      this.pos.y = Math.max(-limit, Math.min(limit, this.pos.y));
+    if (this.pos.y < -limit.y || this.pos.y > limit.y) {
+      this.pos.y = Math.max(-limit.y, Math.min(limit.y, this.pos.y));
       this.vel.y *= -1;
       bounced = true;
     }

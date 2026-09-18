@@ -51,6 +51,8 @@ export class App {
   private hud: HudState = { bannerTicks: BANNER_TICKS + 1, bannerText: '' };
   /** The wave the banner is currently announcing, so it shows once per wave. */
   private announcedWave = 0;
+  /** The last banner the wave layer pushed, so each one shows exactly once. */
+  private announcedBanner = 0;
   private lastFrame = performance.now();
   private showDebug = false;
   private tree: TreeViewer | null = null;
@@ -295,6 +297,7 @@ export class App {
   startRun(): void {
     this.closeTree();
     this.announcedWave = 0;
+    this.announcedBanner = 0;
     this.run = new Run({
       seed: seedFromLocation(),
       difficulty: this.settings.difficulty,
@@ -374,8 +377,14 @@ export class App {
   private updateBanner(run: Run): void {
     if (run.wave !== this.announcedWave) {
       this.announcedWave = run.wave;
+      this.announcedBanner = run.banner.id;
       this.hud.bannerTicks = 0;
       this.hud.bannerText = run.bossName ?? `Wave ${run.wave}`;
+    } else if (run.banner.id !== this.announcedBanner) {
+      // A wave that has something more to say, which only the last fight does.
+      this.announcedBanner = run.banner.id;
+      this.hud.bannerTicks = 0;
+      this.hud.bannerText = run.banner.text;
     } else if (this.hud.bannerTicks <= BANNER_TICKS) {
       this.hud.bannerTicks++;
     }

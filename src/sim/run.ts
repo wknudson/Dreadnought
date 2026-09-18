@@ -1,6 +1,6 @@
 import { Rng } from '../core/rng.ts';
 import type { Intent } from '../core/input.ts';
-import { World, DEFAULT_ARENA_HALF_SIZE } from './world.ts';
+import { World, DEFAULT_ARENA_HALF_SIZE, squareArena } from './world.ts';
 import { resolveContacts } from './physics.ts';
 import { Tank, type Controller, type TankIntent } from './tank.ts';
 import { Shape } from './shape.ts';
@@ -18,6 +18,16 @@ import { lerp, vec, type Vec2 } from '../core/math.ts';
 
 /** A decision waiting on the player, which holds the simulation while it stands. */
 export type PendingChoice = 'class' | 'card';
+
+/**
+ * Eases one arena axis toward its target, snapping once the gap stops showing.
+ *
+ * The snap matters more than it looks: without it the border creeps by
+ * fractions of a unit forever, and anything that asks whether the arena has
+ * finished moving never gets a yes.
+ */
+const easeArenaAxis = (current: number, target: number, rate: number): number =>
+  Math.abs(current - target) < 0.5 ? target : lerp(current, target, rate);
 
 /** Drives the player's tank from the sampled input. */
 class PlayerController implements Controller {
@@ -93,10 +103,7 @@ export class Run implements PerkHost {
     this.cardRng = this.rng.fork('cards');
 
     this.world = new World(this.rng.fork('sim'));
-    this.world.arena = {
-      halfSize: DEFAULT_ARENA_HALF_SIZE,
-      targetHalfSize: DEFAULT_ARENA_HALF_SIZE,
-    };
+    this.world.arena = squareArena(DEFAULT_ARENA_HALF_SIZE);
 
     this.player = new Tank(getTank(ROOT_TANK_ID), 1, this.control, options.color);
     this.player.team = 'player';
@@ -113,6 +120,12 @@ export class Run implements PerkHost {
     this.world.events.on('entityKilled', ({ victim, killer }) => this.onKill(victim, killer));
     this.world.events.on('damageTaken', ({ victim, amount, source }) => {
       if (victim === this.player) this.onPlayerHit(amount, source);
+      // A shot of the player's landing on something. Both directions of a
+      // collision are reported, so the owner is what tells them apart: the
+      // return damage has the victim as its source, not a projectile.
+      if (source instanceof Projectile && source.rootOwner() === this.player) {
+        this.perks.projectileHit(source, victim, this.world);
+      }
     });
 
     this.waves = new WaveDirector(
@@ -132,6 +145,11 @@ export class Run implements PerkHost {
   }
 
   // --- What the interface reads ---------------------------------------------
+
+  /** A one-off announcement from the wave layer, with a counter to spot repeats. */
+  get banner(): { text: string; id: number } {
+    return this.waves.banner;
+  }
 
   get wave(): number {
     return this.waves.wave;
@@ -199,14 +217,16 @@ export class Run implements PerkHost {
     this.waves.tick();
   }
 
-  /** Eases the arena toward its target size after a boss widens it. */
+  /**
+   * Eases the arena toward its target shape after a boss widens it.
+   *
+   * Per axis, so a border that moves on one axis and holds on the other arrives
+   * as one motion rather than as a square that briefly bulges on the way.
+   */
   private tweenArena(): void {
     const arena = this.world.arena;
-    if (Math.abs(arena.halfSize - arena.targetHalfSize) < 0.5) {
-      arena.halfSize = arena.targetHalfSize;
-      return;
-    }
-    arena.halfSize = lerp(arena.halfSize, arena.targetHalfSize, 0.02);
+    arena.half.x = easeArenaAxis(arena.half.x, arena.targetHalf.x, arena.ease);
+    arena.half.y = easeArenaAxis(arena.half.y, arena.targetHalf.y, arena.ease);
   }
 
   // --- Progression ----------------------------------------------------------
@@ -434,9 +454,11 @@ export class Run implements PerkHost {
    */
   setViewReference(halfWidthInUnits: number): void {
     this.waves.viewReference = halfWidthInUnits;
-    const target = arenaSizeForWave(this.wave || 1, halfWidthInUnits);
-    this.world.arena.targetHalfSize = target;
+    // Through the director, not around it: a window resized in the middle of the
+    // last fight must not hand the arena back its square.
+    const target = this.waves.arenaTarget(arenaSizeForWave(this.wave || 1, halfWidthInUnits));
+    this.world.arena.targetHalf = target;
     // The opening frame should not start mid-tween.
-    if (this.world.tick < 2) this.world.arena.halfSize = target;
+    if (this.world.tick < 2) this.world.arena.half = vec(target.x, target.y);
   }
 }
