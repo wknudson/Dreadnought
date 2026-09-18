@@ -170,7 +170,7 @@ export const budgetForWave = (wave: number, difficulty: Difficulty): number =>
  * same length as the player's own firepower grows.
  */
 export const bossHealthForWave = (wave: number, playerLevel: number): number =>
-  1200 + 130 * wave + 32 * playerLevel;
+  800 + 95 * wave + 24 * playerLevel;
 
 /** Experience for killing the boss of a given wave. */
 export const bossXpForWave = (wave: number): number => 1200 + 240 * wave;
