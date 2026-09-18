@@ -50,6 +50,15 @@ export interface RunOptions {
   difficulty: DifficultyId;
   color: string;
   playerName?: string;
+  /**
+   * Fields of the chosen difficulty to replace, for the harnesses.
+   *
+   * A difficulty is a table of constants the game never varies at runtime, which
+   * is right for the game and useless for measuring one of them: asking what a
+   * card rate does means running the same seed at several, and the alternative
+   * is mutating the shared table underneath every run in the process.
+   */
+  difficultyOverrides?: Partial<Difficulty>;
 }
 
 /** How a run ended. */
@@ -98,7 +107,7 @@ export class Run implements PerkHost {
   constructor(options: RunOptions) {
     this.seed = options.seed;
     this.difficultyId = options.difficulty;
-    this.difficulty = DIFFICULTIES[options.difficulty];
+    this.difficulty = { ...DIFFICULTIES[options.difficulty], ...options.difficultyOverrides };
     this.rng = new Rng(options.seed);
     this.cardRng = this.rng.fork('cards');
 
