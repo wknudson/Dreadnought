@@ -34,9 +34,13 @@ export interface Difficulty {
    * by assembling the survival stack, and anything new in the pool displaces it.
    *
    * Push it too far and the win rate will thank you while the game gets worse.
-   * Hard at 0.52 wins one more run in thirty than at 0.44 and takes 106 seconds
-   * to kill a boss instead of 68, because bossHealthForWave scales on level and
-   * the stat points behind that level are what this number spends.
+   * Measured before `statShareOf` existed, hard at 0.52 won one more run in
+   * thirty than at 0.44 and took 106 seconds to kill a boss instead of 68: the
+   * win rate called that an improvement while the fight it was measuring grew
+   * by three quarters. `bossHealthForWave` now corrects its level term for this
+   * number, so that particular drift is answered and a rate moved today will
+   * not repeat it. What the correction cannot answer is how the game plays with
+   * a third of a run's cards spent on perks, so read fight length, not wins.
    */
   perkChance: number;
   /**
