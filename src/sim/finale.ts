@@ -40,13 +40,13 @@ interface FinalePhase {
 }
 
 /**
- * Thresholds deliberately avoid a half.
+ * Two thirds and one third, rather than anything nearer a half.
  *
- * A boss enrages below half health: faster reload, and it closes to just over
- * half its hold distance. Two thirds and one third put that squarely inside the
- * Well, between reshapes, so the player reads one change at a time. A threshold
- * moved to 0.5 would fire an arena reshape and a behaviour change on the same
- * tick, which is more than the fight can say at once.
+ * A boss enrages below half health, so a half is the one value these cannot
+ * take: the walls would move on the tick the boss changed how it fights. Thirds
+ * put the enrage in the middle of the Well, between reshapes, where it lands as
+ * its own event. The clearance is an invariant rather than a preference, and it
+ * is held by a test rather than by this comment.
  */
 const PHASES: readonly FinalePhase[] = [
   {
