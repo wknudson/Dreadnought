@@ -168,6 +168,15 @@ export const budgetForWave = (wave: number, difficulty: Difficulty): number =>
  * by a whole server. Solo, that is a four-minute grind against a health bar. It
  * scales with the wave instead, which keeps each boss a fight of roughly the
  * same length as the player's own firepower grows.
+ *
+ * What caps it is termination, not the win rate. A curve half again as steep
+ * was measured at 10 wins in 54 against this one's 11, which is no difference
+ * at all, so anyone reaching for the win rate to justify a number here will
+ * find it cannot resolve one. The finale is what decides: on the steeper curve
+ * one trial in 48 failed to finish inside six minutes, the boss grinding from
+ * 6126 down to 1811 and still going, and on this one all 48 resolved. A boss
+ * the player cannot finish is a worse failure than one they finish early, and
+ * it is the only part of this that a measurement can actually see.
  */
 export const bossHealthForWave = (wave: number, playerLevel: number): number =>
   800 + 95 * wave + 24 * playerLevel;
