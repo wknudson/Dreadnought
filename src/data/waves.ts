@@ -43,15 +43,15 @@ export interface Difficulty {
 export const DIFFICULTIES: Readonly<Record<DifficultyId, Difficulty>> = {
   easy: {
     id: 'easy', name: 'Easy',
-    health: 0.8, damage: 0.65, budget: 0.8, breather: 8, perkChance: 0.39, xpBonus: 1.45,
+    health: 0.8, damage: 0.65, budget: 0.8, breather: 8, perkChance: 0.41, xpBonus: 1.45,
   },
   normal: {
     id: 'normal', name: 'Normal',
-    health: 1, damage: 1, budget: 1, breather: 6, perkChance: 0.35, xpBonus: 1.15,
+    health: 1, damage: 1, budget: 1, breather: 6, perkChance: 0.37, xpBonus: 1.15,
   },
   hard: {
     id: 'hard', name: 'Hard',
-    health: 1.3, damage: 1.35, budget: 1.3, breather: 4, perkChance: 0.49, xpBonus: 1,
+    health: 1.3, damage: 1.35, budget: 1.3, breather: 4, perkChance: 0.52, xpBonus: 1,
   },
 };
 

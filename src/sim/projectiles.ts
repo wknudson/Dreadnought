@@ -20,8 +20,6 @@ export interface ProjectileMods {
   split: number;
   /** Radius of an explosion on impact. */
   explodeRadius: number;
-  /** Ticks before the shot turns around and comes back. Zero never does. */
-  returnAfter: number;
 }
 
 export const noMods = (): ProjectileMods => ({
@@ -30,7 +28,6 @@ export const noMods = (): ProjectileMods => ({
   homing: 0,
   split: 0,
   explodeRadius: 0,
-  returnAfter: 0,
 });
 
 /** What a drone is being told to do this tick. */
@@ -169,15 +166,6 @@ export class Bullet extends Projectile {
     if (this.age >= this.lifeTicks) {
       this.expire(world);
       return;
-    }
-
-    // A returning shot simply turns around once. It keeps its speed and its
-    // remaining life, so the way back is the way out in reverse, and everything
-    // it passed on the way out gets a second chance to be hit.
-    if (this.mods.returnAfter > 0 && this.age === this.mods.returnAfter) {
-      this.angle = wrapAngle(this.angle + Math.PI);
-      this.vel.x = -this.vel.x;
-      this.vel.y = -this.vel.y;
     }
 
     if (this.mods.homing > 0) this.steerTowardTarget(world);
