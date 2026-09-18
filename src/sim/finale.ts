@@ -64,6 +64,15 @@ const PHASES: readonly FinalePhase[] = [
   },
 ];
 
+/**
+ * The boss health fractions at which the arena changes shape.
+ *
+ * Exported so that anything else keyed to the same health bar can be held clear
+ * of them. Two changes landing on one tick is more than a fight can say at once:
+ * the walls moving is its own announcement and wants a moment to itself.
+ */
+export const FINALE_THRESHOLDS: readonly number[] = PHASES.map((phase) => phase.until);
+
 /** How long the incoming bounds are shown before they are imposed. */
 const TELEGRAPH_TICKS = Math.round(TICKS_PER_SECOND * 2.6);
 /** How fast the border travels while a reshape lands, as a fraction of the gap. */

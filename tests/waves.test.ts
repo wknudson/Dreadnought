@@ -11,6 +11,8 @@ import assert from 'node:assert/strict';
 import { Run } from '../src/sim/run.ts';
 import { Shape } from '../src/sim/shape.ts';
 import { Tank } from '../src/sim/tank.ts';
+import { ENRAGE_AT } from '../src/sim/bossAi.ts';
+import { FINALE_THRESHOLDS } from '../src/sim/finale.ts';
 import { Rng } from '../src/core/rng.ts';
 import { vec } from '../src/core/math.ts';
 import { TICKS_PER_SECOND } from '../src/core/loop.ts';
@@ -258,6 +260,27 @@ test('a boss wave puts a boss on the field', () => {
   assert.ok(boss.radius > run.player.radius * 2, 'and it should be much larger than the player');
   assert.ok(boss.maxHealth > 400, 'with a health pool worth chewing through');
   assert.equal(run.bossName, getBoss(bossFor(BOSS_INTERVAL)!).name);
+});
+
+/**
+ * How far the enrage has to stay from an arena transition, as a health fraction.
+ *
+ * A tenth of a boss's health is a few seconds of fighting at the pace these run
+ * at, which is enough for the walls to land and be read before the boss changes
+ * how it behaves.
+ */
+const ENRAGE_CLEARANCE = 0.1;
+
+test('a boss enrages clear of the arena reshaping around it', () => {
+  for (const threshold of FINALE_THRESHOLDS) {
+    // The last phase ends when the boss does, which is not a transition to read.
+    if (threshold <= 0) continue;
+    assert.ok(
+      Math.abs(ENRAGE_AT - threshold) >= ENRAGE_CLEARANCE,
+      `enrage at ${ENRAGE_AT} lands on the arena transition at ${threshold.toFixed(2)}; ` +
+        'move one of them so the walls and the boss do not change on the same tick',
+    );
+  }
 });
 
 test('a boss enrages below half health without losing its scaled health', () => {

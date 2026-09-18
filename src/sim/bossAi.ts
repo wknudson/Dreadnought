@@ -7,6 +7,19 @@ import { vec, wrapAngle } from '../core/math.ts';
 import { predictIntercept } from '../core/math.ts';
 
 /**
+ * The health fraction at which a boss turns.
+ *
+ * Held deliberately clear of the finale's own thresholds, which reshape the
+ * arena at two thirds and one third of the last boss's health. An arena change
+ * and a behaviour change arriving on the same tick is two announcements at
+ * once, and the fight stops being readable at the moment it most needs to be: a
+ * half is the furthest point from both. The two are independent numbers rather
+ * than one derived from the other, so a test in `tests/waves.test.ts` is what
+ * holds them apart when either side moves.
+ */
+export const ENRAGE_AT = 0.5;
+
+/**
  * Drives a boss.
  *
  * Each behaviour is a few lines rather than a state machine, because what makes
@@ -66,7 +79,7 @@ export class BossController implements Controller {
 
     // Half health is the turn. Everything below reads it, and the refresh is
     // what carries the shorter reload through to the barrels.
-    if (!this.enraged && tank.maxHealth > 0 && tank.health <= tank.maxHealth * 0.5) {
+    if (!this.enraged && tank.maxHealth > 0 && tank.health <= tank.maxHealth * ENRAGE_AT) {
       this.enraged = true;
       tank.refresh();
     }
