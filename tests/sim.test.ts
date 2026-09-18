@@ -589,24 +589,6 @@ test('a split shot leaves children where it died', () => {
   );
 });
 
-test('a boomerang shot comes back past the tank', () => {
-  const run = perked(['boomerang']);
-  advance(run, 3, intent({ fire: true }));
-  const shot = bulletsIn(run)[0];
-  assert.ok(shot, 'the tank fired');
-
-  let furthest = 0;
-  for (let i = 0; i < 90 && shot.alive; i++) {
-    advance(run, 1);
-    furthest = Math.max(furthest, shot.pos.x - run.player.pos.x);
-  }
-  assert.ok(furthest > 500, `it should go out first, reached ${Math.round(furthest)}`);
-  assert.ok(
-    shot.pos.x - run.player.pos.x < furthest / 2,
-    'and be on its way back by the end of its life',
-  );
-});
-
 test('a chain reaction spreads without recursing forever', () => {
   const run = perked(['chain'], 3);
   // Packed tightly, so every blast is inside the next square's radius: the
@@ -655,16 +637,4 @@ test('a bargain perk charges what it promises', () => {
   const glassShot = bulletsIn(glass)[0];
   assert.ok(plainShot && glassShot);
   assert.equal(glassShot.contactDamage, plainShot.contactDamage * 2, 'and damage is what it buys');
-});
-
-test('an executioner finishes what a shot would have left standing', () => {
-  const run = perked(['executioner'], 3);
-  squaresAhead(run, 1);
-  const square = run.world.entities.find((e) => e instanceof Shape && e.alive) as Shape;
-  assert.ok(square);
-
-  // Left on a sliver, which is exactly what the perk is for.
-  square.health = square.maxHealth * 0.1;
-  advance(run, 40, intent({ fire: true }));
-  assert.equal(square.alive, false);
 });

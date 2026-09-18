@@ -3,9 +3,7 @@ import type { World } from './world.ts';
 import { Entity, type EntityKind } from './entity.ts';
 import { Tank } from './tank.ts';
 import { Shape } from './shape.ts';
-import { Projectile, raiseNecroDrone } from './projectiles.ts';
-import type { BarrelState } from './weapon.ts';
-import { getTank } from '../data/tanks.ts';
+import { Projectile } from './projectiles.ts';
 import { applyDamage, integrate, maintainVelocity } from './physics.ts';
 import { COLORS } from '../data/colors.ts';
 import { vec, type Vec2 } from '../core/math.ts';
@@ -76,67 +74,6 @@ export class Pickup extends Entity {
       maintainVelocity(this, Math.atan2(dy, dx), 6 + 22 * pull);
     }
     integrate(this);
-  }
-}
-
-/**
- * A mine dropped by the Minefield perk.
- *
- * Neutral, so the physics pass leaves it alone: a mine that traded contact
- * damage would be a wall, and what makes it a mine is that it waits, arms, and
- * then goes off all at once.
- */
-export class Mine extends Entity {
-  override readonly kind: EntityKind = 'pickup';
-
-  color = '#FF9A52';
-
-  private age = 0;
-  private readonly blast: number;
-  private readonly power: number;
-  private readonly life: number;
-
-  /** Ticks before it will trigger, so one cannot be dropped onto something. */
-  private static readonly ARMING = 12;
-
-  constructor(at: Vec2, blast: number, damage: number, life: number) {
-    super();
-    this.pos = vec(at.x, at.y);
-    this.prevPos = vec(at.x, at.y);
-    this.radius = 11;
-    this.team = 'neutral';
-    this.hideHealthBar = true;
-    this.blast = blast;
-    this.power = damage;
-    this.life = life;
-  }
-
-  override update(world: World): void {
-    this.age++;
-    if (this.age > this.life) {
-      this.alive = false;
-      return;
-    }
-    if (this.age < Mine.ARMING) return;
-
-    const touching = world
-      .near(this.pos, this.radius + 24)
-      .some((e) => e.alive && e.team === 'enemy' && e.kind !== 'projectile');
-    if (!touching) return;
-
-    for (const e of world.near(this.pos, this.blast)) {
-      if (!e.alive || e.team !== 'enemy' || e.kind === 'projectile') continue;
-      applyDamage(world, e, this.power, this.owner);
-    }
-    world.addDeath({
-      pos: vec(this.pos.x, this.pos.y),
-      angle: 0,
-      radius: this.blast * 0.5,
-      color: this.color,
-      sides: 1,
-      def: null,
-    });
-    this.alive = false;
   }
 }
 
@@ -530,66 +467,6 @@ export const PERKS: readonly PerkDefinition[] = [
       },
     }),
   },
-  {
-    id: 'executioner',
-    name: 'Executioner',
-    description: 'Anything you hit that is nearly finished is finished there and then.',
-    rarity: 'uncommon',
-    weight: 7,
-    maxStacks: 3,
-    available: (host) => host.player.def.barrels.length > 0,
-    create: (host) => ({
-      id: 'executioner',
-      stacks: 1,
-      onProjectileHit(projectile, victim, world) {
-        if (!isOwnedBy(projectile, host.player)) return;
-        if (!victim.alive || victim.kind === 'projectile') return;
-        const threshold = victim.maxHealth * (0.08 + 0.04 * this.stacks);
-        if (victim.health > threshold) return;
-        applyDamage(world, victim, victim.health, host.player);
-      },
-    }),
-  },
-  {
-    id: 'gravedigger',
-    name: 'Gravedigger',
-    description: 'Every few kills raises a drone that fights at your side.',
-    rarity: 'rare',
-    weight: 4,
-    maxStacks: 3,
-    create: (host) => {
-      // Necromancer's spawner, borrowed for the drone it makes. The perk keeps
-      // its own barrel so its fleet is capped separately from anything the tank
-      // fields itself, and a Necromancer taking this gets both.
-      const barrel: BarrelState = {
-        def: getTank('necromancer').barrels[0]!,
-        cycle: 0,
-        primed: true,
-        recoilAnim: 0,
-        liveCount: 0,
-      };
-      let kills = 0;
-      return {
-        id: 'gravedigger',
-        stacks: 1,
-        onEnemyKilled(victim, world) {
-          if (++kills < Math.max(2, 6 - this.stacks)) return;
-          kills = 0;
-          if (barrel.liveCount >= 2 * this.stacks) return;
-          raiseNecroDrone(
-            world,
-            host.player,
-            host.player,
-            barrel,
-            host.player.points,
-            host.player.scale(),
-            victim.pos,
-            host.player.color,
-          );
-        },
-      };
-    },
-  },
 
   // --- Bargains: everything here costs something ---------------------------
   {
@@ -608,22 +485,6 @@ export const PERKS: readonly PerkDefinition[] = [
       },
       modifyProjectile(stats) {
         stats.damage *= 1 + 0.5 * this.stacks;
-      },
-    }),
-  },
-  {
-    id: 'plating',
-    name: 'Heavy Plating',
-    description: 'A third more health, and you carry the weight of it.',
-    rarity: 'uncommon',
-    weight: 7,
-    maxStacks: 3,
-    create: () => ({
-      id: 'plating',
-      stacks: 1,
-      modifyStats(stats) {
-        stats.maxHealth *= 1 + 0.35 * this.stacks;
-        stats.acceleration *= Math.pow(0.88, this.stacks);
       },
     }),
   },
@@ -659,27 +520,6 @@ export const PERKS: readonly PerkDefinition[] = [
       };
     },
   },
-  {
-    id: 'hair-trigger',
-    name: 'Hair Trigger',
-    description: 'Fires a third faster, and nothing like as straight.',
-    rarity: 'uncommon',
-    weight: 7,
-    maxStacks: 2,
-    available: (host) => host.player.def.barrels.length > 0,
-    create: () => ({
-      id: 'hair-trigger',
-      stacks: 1,
-      modifyStats(stats) {
-        stats.reloadScale *= Math.pow(0.75, this.stacks);
-      },
-      modifyProjectile(stats) {
-        // The floor matters: a Sniper fires perfectly straight, and a bargain
-        // that costs it nothing is not a bargain.
-        stats.scatter = Math.max(stats.scatter, 0.05) * (1 + 1.2 * this.stacks);
-      },
-    }),
-  },
 
   // --- The field: shots that keep going, and what is left behind -----------
   {
@@ -704,26 +544,6 @@ export const PERKS: readonly PerkDefinition[] = [
         if (!isOwnedBy(projectile, host.player)) return;
         const p = projectile as Projectile;
         if (p.mods.split > 0) p.alive = false;
-      },
-    }),
-  },
-  {
-    id: 'boomerang',
-    name: 'Boomerang',
-    description: 'Your shots turn around and come back through whatever they missed.',
-    rarity: 'rare',
-    weight: 4,
-    maxStacks: 1,
-    available: (host) => host.player.def.barrels.length > 0,
-    create: () => ({
-      id: 'boomerang',
-      stacks: 1,
-      modifyProjectile(stats, mods) {
-        // Drones and traps live forever or to their own rules; only something
-        // with a timer has a halfway point to turn at.
-        if (!Number.isFinite(stats.lifeTicks)) return;
-        mods.returnAfter = Math.round(stats.lifeTicks * 0.45);
-        stats.lifeTicks *= 1.9;
       },
     }),
   },
@@ -759,33 +579,6 @@ export const PERKS: readonly PerkDefinition[] = [
               def: null,
             });
           }
-        },
-      };
-    },
-  },
-  {
-    id: 'minefield',
-    name: 'Minefield',
-    description: 'You leave mines behind you as you drive.',
-    rarity: 'rare',
-    weight: 4,
-    maxStacks: 3,
-    create: (host) => {
-      let cooldown = 0;
-      return {
-        id: 'minefield',
-        stacks: 1,
-        onTick(world) {
-          if (--cooldown > 0) return;
-          cooldown = Math.max(30, 90 - 15 * this.stacks);
-          const mine = new Mine(
-            host.player.pos,
-            100 + 20 * this.stacks,
-            18 + 14 * this.stacks,
-            15 * 25,
-          );
-          mine.owner = host.player;
-          world.spawn(mine);
         },
       };
     },

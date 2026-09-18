@@ -22,12 +22,25 @@ export interface Difficulty {
   /**
    * Chance a card slot offers a perk rather than a stat.
    *
-   * Tied to the size of the perk pool, which is the part that is easy to miss.
-   * A run draws a fixed number of cards, so every perk added to the pool makes
-   * each one rarer, and a run is won by assembling a few perks that work
-   * together rather than by collecting many. The harness is blunt about it:
-   * adding twelve perks that do nothing at all costs as many runs as adding
-   * twelve real ones. Grow the pool and this has to grow with it.
+   * The lever that pays for the perk pool existing, and the one that quietly
+   * sets how much damage a player brings to a boss. A run deals 33 cards and
+   * each slot rolls this independently, so a player ends with about 33 * (1 -
+   * this) stat points: 24.8 at a quarter, 15.8 at a half. Raising it is what
+   * recovers the runs a bigger pool costs, and the recovery flattens.
+   *
+   * It is not tied to how many perks there are, which is the trap. Going from
+   * fifteen perks to twenty-one costs the same as going to twenty-seven, and
+   * twelve perks that do nothing cost as much as twelve real ones: a run is won
+   * by assembling the survival stack, and anything new in the pool displaces it.
+   *
+   * Push it too far and the win rate will thank you while the game gets worse.
+   * Measured before `statShareOf` existed, hard at 0.52 won one more run in
+   * thirty than at 0.44 and took 106 seconds to kill a boss instead of 68: the
+   * win rate called that an improvement while the fight it was measuring grew
+   * by three quarters. `bossHealthForWave` now corrects its level term for this
+   * number, so that particular drift is answered and a rate moved today will
+   * not repeat it. What the correction cannot answer is how the game plays with
+   * a third of a run's cards spent on perks, so read fight length, not wins.
    */
   perkChance: number;
   /**
@@ -43,7 +56,7 @@ export interface Difficulty {
 export const DIFFICULTIES: Readonly<Record<DifficultyId, Difficulty>> = {
   easy: {
     id: 'easy', name: 'Easy',
-    health: 0.8, damage: 0.65, budget: 0.8, breather: 8, perkChance: 0.39, xpBonus: 1.45,
+    health: 0.8, damage: 0.65, budget: 0.8, breather: 8, perkChance: 0.35, xpBonus: 1.45,
   },
   normal: {
     id: 'normal', name: 'Normal',
@@ -51,7 +64,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, Difficulty>> = {
   },
   hard: {
     id: 'hard', name: 'Hard',
-    health: 1.3, damage: 1.35, budget: 1.3, breather: 4, perkChance: 0.49, xpBonus: 1,
+    health: 1.3, damage: 1.35, budget: 1.3, breather: 4, perkChance: 0.44, xpBonus: 1,
   },
 };
 
@@ -162,15 +175,60 @@ export const budgetForWave = (wave: number, difficulty: Difficulty): number =>
   Math.round((8 + 3.2 * wave) * difficulty.budget);
 
 /**
+ * The share of a run's cards a difficulty leaves as stat points, against the
+ * share the boss health curve was drawn for.
+ *
+ * A card slot offers a perk with probability `perkChance` and a stat otherwise,
+ * so a difficulty's card rate decides how much of a level is damage. It moved,
+ * and it moved by different amounts per difficulty: a player on hard now reaches
+ * a boss with about a quarter fewer stat points than the curve assumed, while
+ * the boss still collects its full share per level and hard's health multiplier
+ * on top. Nobody chose that product. It is two numbers in two files, one of
+ * which belongs to the cards rather than to the bosses.
+ *
+ * Scaling the level term by this puts it back: how hard a boss is stays a thing
+ * the difficulty multipliers say, and a change to the card rate stops silently
+ * retuning every boss fight in the game.
+ *
+ * It corrects for damage, which is what fight length is made of, and not for
+ * survival. Perks are mostly what keeps a player alive, so a difficulty dealing
+ * more of them has a player who lives longer and hits softer; only the second
+ * half is the curve's business.
+ */
+export const statShareOf = (difficulty: Difficulty): number =>
+  (1 - difficulty.perkChance) / REFERENCE_STAT_SHARE;
+
+/**
+ * The stat share the curve below was measured against: a card rate of 0.35.
+ *
+ * A record of the conditions of a measurement, not a preference. The fight
+ * lengths that set the curve were timed on normal while it dealt perks at that
+ * rate, so that is the point at which the correction has to be one.
+ */
+const REFERENCE_STAT_SHARE = 1 - 0.35;
+
+/**
  * How much health a boss has on a given wave.
  *
  * diep.io gives every boss a flat three thousand, but there a boss is worn down
  * by a whole server. Solo, that is a four-minute grind against a health bar. It
  * scales with the wave instead, which keeps each boss a fight of roughly the
  * same length as the player's own firepower grows.
+ *
+ * What caps it is termination, not the win rate. A curve half again as steep
+ * was measured at 10 wins in 54 against this one's 11, which is no difference
+ * at all, so anyone reaching for the win rate to justify a number here will
+ * find it cannot resolve one. The finale is what decides: on the steeper curve
+ * one trial in 48 failed to finish inside six minutes, the boss grinding from
+ * 6126 down to 1811 and still going, and on this one all 48 resolved. A boss
+ * the player cannot finish is a worse failure than one they finish early, and
+ * it is the only part of this that a measurement can actually see.
  */
-export const bossHealthForWave = (wave: number, playerLevel: number): number =>
-  1200 + 130 * wave + 32 * playerLevel;
+export const bossHealthForWave = (
+  wave: number,
+  playerLevel: number,
+  difficulty: Difficulty,
+): number => 800 + 95 * wave + 24 * playerLevel * statShareOf(difficulty);
 
 /** Experience for killing the boss of a given wave. */
 export const bossXpForWave = (wave: number): number => 1200 + 240 * wave;

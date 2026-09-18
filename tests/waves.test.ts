@@ -11,6 +11,8 @@ import assert from 'node:assert/strict';
 import { Run } from '../src/sim/run.ts';
 import { Shape } from '../src/sim/shape.ts';
 import { Tank } from '../src/sim/tank.ts';
+import { ENRAGE_AT } from '../src/sim/bossAi.ts';
+import { FINALE_THRESHOLDS } from '../src/sim/finale.ts';
 import { Rng } from '../src/core/rng.ts';
 import { vec } from '../src/core/math.ts';
 import { TICKS_PER_SECOND } from '../src/core/loop.ts';
@@ -22,6 +24,7 @@ import {
   FINAL_WAVE,
   arenaSizeForWave,
   bossFor,
+  bossHealthForWave,
   budgetForWave,
   enemyLevel,
   generateWave,
@@ -36,6 +39,7 @@ import { deriveProjectileStats } from '../src/sim/stats.ts';
 import { getTank, DEFAULT_STAT_CAP } from '../src/data/tanks.ts';
 import { STAT_ORDER } from '../src/data/schema.ts';
 import type { Intent } from '../src/core/input.ts';
+import type { Difficulty } from '../src/data/waves.ts';
 
 const intent = (over: Partial<Intent> = {}): Intent => ({
   move: vec(),
@@ -258,6 +262,57 @@ test('a boss wave puts a boss on the field', () => {
   assert.ok(boss.radius > run.player.radius * 2, 'and it should be much larger than the player');
   assert.ok(boss.maxHealth > 400, 'with a health pool worth chewing through');
   assert.equal(run.bossName, getBoss(bossFor(BOSS_INTERVAL)!).name);
+});
+
+/**
+ * How far the enrage has to stay from an arena transition, as a health fraction.
+ *
+ * A tenth of a boss's health is a few seconds of fighting at the pace these run
+ * at, which is enough for the walls to land and be read before the boss changes
+ * how it behaves.
+ */
+const ENRAGE_CLEARANCE = 0.1;
+
+test('the card rate stops boss health drifting between difficulties', () => {
+  const level = 45;
+  const wave = 25;
+  const health = (d: Difficulty): number => bossHealthForWave(wave, level, d);
+
+  // Normal is where the curve was timed, so it is the one that must not move.
+  assert.equal(
+    Math.round(health(DIFFICULTIES.normal)),
+    Math.round(800 + 95 * wave + 24 * level),
+    'the reference difficulty should be left exactly where it was measured',
+  );
+
+  // Hard deals the most perks, so it arrives with the fewest stat points and
+  // the least damage; its bosses have to hold less health for the same fight.
+  assert.ok(
+    DIFFICULTIES.hard.perkChance > DIFFICULTIES.normal.perkChance,
+    'this test assumes hard deals more perks than normal',
+  );
+  assert.ok(
+    health(DIFFICULTIES.hard) < health(DIFFICULTIES.normal),
+    'a difficulty dealing more perks buys fewer stat points and needs less boss',
+  );
+
+  // How hard a difficulty is stays the multipliers' job, not the card rate's.
+  assert.ok(
+    DIFFICULTIES.hard.health > DIFFICULTIES.normal.health,
+    'hard should still be harder, by the lever that is meant to say so',
+  );
+});
+
+test('a boss enrages clear of the arena reshaping around it', () => {
+  for (const threshold of FINALE_THRESHOLDS) {
+    // The last phase ends when the boss does, which is not a transition to read.
+    if (threshold <= 0) continue;
+    assert.ok(
+      Math.abs(ENRAGE_AT - threshold) >= ENRAGE_CLEARANCE,
+      `enrage at ${ENRAGE_AT} lands on the arena transition at ${threshold.toFixed(2)}; ` +
+        'move one of them so the walls and the boss do not change on the same tick',
+    );
+  }
 });
 
 test('a boss enrages below half health without losing its scaled health', () => {
