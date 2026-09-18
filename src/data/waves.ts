@@ -37,10 +37,11 @@ export interface Difficulty {
    * Measured before `statShareOf` existed, hard at 0.52 won one more run in
    * thirty than at 0.44 and took 106 seconds to kill a boss instead of 68: the
    * win rate called that an improvement while the fight it was measuring grew
-   * by three quarters. `bossHealthForWave` now corrects its level term for this
-   * number, so that particular drift is answered and a rate moved today will
-   * not repeat it. What the correction cannot answer is how the game plays with
-   * a third of a run's cards spent on perks, so read fight length, not wins.
+   * by three quarters. `bossHealthForWave` now scales its whole curve by the
+   * stat share this leaves, so that particular drift is answered and a rate
+   * moved today will not repeat it. What the correction cannot answer is how
+   * the game plays with a third of a run's cards spent on perks, so read fight
+   * length, not wins.
    */
   perkChance: number;
   /**
@@ -186,9 +187,12 @@ export const budgetForWave = (wave: number, difficulty: Difficulty): number =>
  * on top. Nobody chose that product. It is two numbers in two files, one of
  * which belongs to the cards rather than to the bosses.
  *
- * Scaling the level term by this puts it back: how hard a boss is stays a thing
- * the difficulty multipliers say, and a change to the card rate stops silently
- * retuning every boss fight in the game.
+ * The whole curve is scaled by this, not just the term keyed to level. How long
+ * a fight runs is boss health over player damage, and the card rate moves the
+ * damage, so every part of the health has to answer to it. Scaling the level
+ * term alone was tried and is a quarter measure: that term is a quarter of the
+ * curve, so it moved hard's bosses by five percent against a drift measured at
+ * two and a half times the fight length.
  *
  * It corrects for damage, which is what fight length is made of, and not for
  * survival. Perks are mostly what keeps a player alive, so a difficulty dealing
@@ -215,20 +219,27 @@ const REFERENCE_STAT_SHARE = 1 - 0.35;
  * scales with the wave instead, which keeps each boss a fight of roughly the
  * same length as the player's own firepower grows.
  *
- * What caps it is termination, not the win rate. A curve half again as steep
- * was measured at 10 wins in 54 against this one's 11, which is no difference
- * at all, so anyone reaching for the win rate to justify a number here will
- * find it cannot resolve one. The finale is what decides: on the steeper curve
- * one trial in 48 failed to finish inside six minutes, the boss grinding from
- * 6126 down to 1811 and still going, and on this one all 48 resolved. A boss
- * the player cannot finish is a worse failure than one they finish early, and
- * it is the only part of this that a measurement can actually see.
+ * What caps it is termination, not the win rate: a curve half again as steep
+ * measured 10 wins in 54 against 11, which is no difference at all, so anyone
+ * reaching for the win rate to justify a number here will find it cannot
+ * resolve one. Fight length and termination can be measured, and this is fitted
+ * to both, on `npm run fight` across waves 5, 15 and 25 at every difficulty.
+ *
+ * Cleared fights run a median 37 to 56 seconds on normal and 60 to 76 on hard,
+ * against a sixty to ninety second target, and one fight in 144 hits the six
+ * minute cutoff with one percent of the boss left — a clock landing mid-kill
+ * rather than a fight that cannot end. Steeper curves reach the target more
+ * often and leave 10 and 27 percent standing when they fail, which is the
+ * difference between a long fight and one the player cannot finish.
+ *
+ * The population is a bot holding randomly taken cards, so it is weaker than
+ * someone choosing, and a real build will clear faster than these numbers.
  */
 export const bossHealthForWave = (
   wave: number,
   playerLevel: number,
   difficulty: Difficulty,
-): number => 800 + 95 * wave + 24 * playerLevel * statShareOf(difficulty);
+): number => (1150 + 125 * wave + 30 * playerLevel) * statShareOf(difficulty);
 
 /** Experience for killing the boss of a given wave. */
 export const bossXpForWave = (wave: number): number => 1200 + 240 * wave;

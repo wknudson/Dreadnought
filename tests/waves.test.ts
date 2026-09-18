@@ -25,6 +25,7 @@ import {
   arenaSizeForWave,
   bossFor,
   bossHealthForWave,
+  statShareOf,
   budgetForWave,
   enemyLevel,
   generateWave,
@@ -274,27 +275,28 @@ test('a boss wave puts a boss on the field', () => {
 const ENRAGE_CLEARANCE = 0.1;
 
 test('the card rate stops boss health drifting between difficulties', () => {
-  const level = 45;
-  const wave = 25;
-  const health = (d: Difficulty): number => bossHealthForWave(wave, level, d);
+  const health = (d: Difficulty): number => bossHealthForWave(25, 45, d);
 
-  // Normal is where the curve was timed, so it is the one that must not move.
-  assert.equal(
-    Math.round(health(DIFFICULTIES.normal)),
-    Math.round(800 + 95 * wave + 24 * level),
-    'the reference difficulty should be left exactly where it was measured',
-  );
+  // The curve was timed at a card rate of 0.35, so a difficulty dealing perks
+  // at that rate is the one the correction must leave alone. Which difficulty
+  // that is can change under us, and has: normal was 0.35 when this was written.
+  // Pinning the rate rather than the difficulty is what keeps this a statement
+  // about the correction instead of a record of where normal used to sit, and
+  // asserting the multiplier rather than a health figure keeps it from having
+  // to be edited every time the curve itself is retuned.
+  const atReference: Difficulty = { ...DIFFICULTIES.normal, perkChance: 0.35 };
+  assert.equal(statShareOf(atReference), 1, 'the measured rate is where the correction vanishes');
 
-  // Hard deals the most perks, so it arrives with the fewest stat points and
-  // the least damage; its bosses have to hold less health for the same fight.
-  assert.ok(
-    DIFFICULTIES.hard.perkChance > DIFFICULTIES.normal.perkChance,
-    'this test assumes hard deals more perks than normal',
-  );
-  assert.ok(
-    health(DIFFICULTIES.hard) < health(DIFFICULTIES.normal),
-    'a difficulty dealing more perks buys fewer stat points and needs less boss',
-  );
+  // Every difficulty dealing more perks than that buys fewer stat points, so
+  // its player hits softer and its bosses have to hold less health to take the
+  // same time to kill.
+  for (const d of Object.values(DIFFICULTIES)) {
+    if (d.perkChance <= 0.35) continue;
+    assert.ok(
+      health(d) < health(atReference),
+      `${d.id} deals perks at ${d.perkChance} and should field less boss, not more`,
+    );
+  }
 
   // How hard a difficulty is stays the multipliers' job, not the card rate's.
   assert.ok(
