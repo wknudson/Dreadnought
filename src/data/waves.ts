@@ -162,6 +162,39 @@ export const budgetForWave = (wave: number, difficulty: Difficulty): number =>
   Math.round((8 + 3.2 * wave) * difficulty.budget);
 
 /**
+ * The share of a run's cards a difficulty leaves as stat points, against the
+ * share the boss health curve was drawn for.
+ *
+ * A card slot offers a perk with probability `perkChance` and a stat otherwise,
+ * so a difficulty's card rate decides how much of a level is damage. It moved,
+ * and it moved by different amounts per difficulty: a player on hard now reaches
+ * a boss with about a quarter fewer stat points than the curve assumed, while
+ * the boss still collects its full share per level and hard's health multiplier
+ * on top. Nobody chose that product. It is two numbers in two files, one of
+ * which belongs to the cards rather than to the bosses.
+ *
+ * Scaling the level term by this puts it back: how hard a boss is stays a thing
+ * the difficulty multipliers say, and a change to the card rate stops silently
+ * retuning every boss fight in the game.
+ *
+ * It corrects for damage, which is what fight length is made of, and not for
+ * survival. Perks are mostly what keeps a player alive, so a difficulty dealing
+ * more of them has a player who lives longer and hits softer; only the second
+ * half is the curve's business.
+ */
+export const statShareOf = (difficulty: Difficulty): number =>
+  (1 - difficulty.perkChance) / REFERENCE_STAT_SHARE;
+
+/**
+ * The stat share the curve below was measured against: a card rate of 0.35.
+ *
+ * A record of the conditions of a measurement, not a preference. The fight
+ * lengths that set the curve were timed on normal while it dealt perks at that
+ * rate, so that is the point at which the correction has to be one.
+ */
+const REFERENCE_STAT_SHARE = 1 - 0.35;
+
+/**
  * How much health a boss has on a given wave.
  *
  * diep.io gives every boss a flat three thousand, but there a boss is worn down
@@ -178,8 +211,11 @@ export const budgetForWave = (wave: number, difficulty: Difficulty): number =>
  * the player cannot finish is a worse failure than one they finish early, and
  * it is the only part of this that a measurement can actually see.
  */
-export const bossHealthForWave = (wave: number, playerLevel: number): number =>
-  800 + 95 * wave + 24 * playerLevel;
+export const bossHealthForWave = (
+  wave: number,
+  playerLevel: number,
+  difficulty: Difficulty,
+): number => 800 + 95 * wave + 24 * playerLevel * statShareOf(difficulty);
 
 /** Experience for killing the boss of a given wave. */
 export const bossXpForWave = (wave: number): number => 1200 + 240 * wave;

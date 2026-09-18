@@ -370,7 +370,9 @@ export class WaveDirector {
     // what makes a refresh survivable, which is what the enrage needs: dropping
     // below half health rebuilds the block to pick up the shorter reload.
     const bossHealth =
-      bossHealthForWave(this.wave, this.playerLevel) * boss.toughness * this.difficulty.health;
+      bossHealthForWave(this.wave, this.playerLevel, this.difficulty) *
+      boss.toughness *
+      this.difficulty.health;
     const bossBodyDamage = boss.bodyDamage * threat * this.difficulty.damage;
     tank.statModifier = (stats) => {
       stats.maxHealth = bossHealth;

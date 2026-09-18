@@ -24,6 +24,7 @@ import {
   FINAL_WAVE,
   arenaSizeForWave,
   bossFor,
+  bossHealthForWave,
   budgetForWave,
   enemyLevel,
   generateWave,
@@ -38,6 +39,7 @@ import { deriveProjectileStats } from '../src/sim/stats.ts';
 import { getTank, DEFAULT_STAT_CAP } from '../src/data/tanks.ts';
 import { STAT_ORDER } from '../src/data/schema.ts';
 import type { Intent } from '../src/core/input.ts';
+import type { Difficulty } from '../src/data/waves.ts';
 
 const intent = (over: Partial<Intent> = {}): Intent => ({
   move: vec(),
@@ -270,6 +272,36 @@ test('a boss wave puts a boss on the field', () => {
  * how it behaves.
  */
 const ENRAGE_CLEARANCE = 0.1;
+
+test('the card rate stops boss health drifting between difficulties', () => {
+  const level = 45;
+  const wave = 25;
+  const health = (d: Difficulty): number => bossHealthForWave(wave, level, d);
+
+  // Normal is where the curve was timed, so it is the one that must not move.
+  assert.equal(
+    Math.round(health(DIFFICULTIES.normal)),
+    Math.round(800 + 95 * wave + 24 * level),
+    'the reference difficulty should be left exactly where it was measured',
+  );
+
+  // Hard deals the most perks, so it arrives with the fewest stat points and
+  // the least damage; its bosses have to hold less health for the same fight.
+  assert.ok(
+    DIFFICULTIES.hard.perkChance > DIFFICULTIES.normal.perkChance,
+    'this test assumes hard deals more perks than normal',
+  );
+  assert.ok(
+    health(DIFFICULTIES.hard) < health(DIFFICULTIES.normal),
+    'a difficulty dealing more perks buys fewer stat points and needs less boss',
+  );
+
+  // How hard a difficulty is stays the multipliers' job, not the card rate's.
+  assert.ok(
+    DIFFICULTIES.hard.health > DIFFICULTIES.normal.health,
+    'hard should still be harder, by the lever that is meant to say so',
+  );
+});
 
 test('a boss enrages clear of the arena reshaping around it', () => {
   for (const threshold of FINALE_THRESHOLDS) {
