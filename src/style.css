@@ -190,8 +190,12 @@ body {
   color: var(--muted);
 }
 
+/* The arena floor behind each tank, so a colour looks the way it will in play
+ * and the dark ones do not vanish into the card. */
 .swatch-canvas {
   display: block;
+  border-radius: 10px;
+  background: var(--bg);
 }
 
 .difficulties {
