@@ -37,10 +37,7 @@ export const emptyStats = (): StatBlock => ({
   moveSpeed: 0,
 });
 
-/** Total points spent, which is how many cards have gone into stats. */
-export const spentPoints = (s: StatBlock): number =>
-  STAT_ORDER.reduce((sum, key) => sum + s[key], 0);
-
+/** Whether this tank can take another point in the stat. */
 export function canRaise(def: TankDefinition, stats: StatBlock, key: StatKey): boolean {
   return stats[key] < statCap(def, key);
 }

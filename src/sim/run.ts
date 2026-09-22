@@ -14,7 +14,7 @@ import { resolveContacts } from './physics.ts';
 import { Tank, type Controller, type TankIntent } from './tank.ts';
 import { Shape } from './shape.ts';
 import { Projectile, raiseNecroDrone } from './projectiles.ts';
-import { getTank, ROOT_TANK_ID } from '../data/tanks.ts';
+import { getTank, ROOT_TANK_ID, upgradeChoices } from '../data/tanks.ts';
 import { CARD_LEVELS, CLASS_LEVELS, levelForXp, MAX_LEVEL, xpForLevel } from '../data/leveling.ts';
 import type { DifficultyId } from '../core/storage.ts';
 import { DIFFICULTIES, arenaSizeForWave, type Difficulty } from '../data/waves.ts';
@@ -306,13 +306,7 @@ export class Run implements PerkHost {
 
   /** The class options available right now, empty when there is no choice to make. */
   classOptions(): string[] {
-    return this.player.def.upgradesTo
-      .filter((id) => this.level >= getTank(id).unlockLevel)
-      .sort((a, b) => {
-        const x = getTank(a);
-        const y = getTank(b);
-        return x.tier - y.tier || x.name.localeCompare(y.name);
-      });
+    return upgradeChoices(this.player.def.id, this.level).map((def) => def.id);
   }
 
   /**

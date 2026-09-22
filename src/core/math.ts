@@ -37,10 +37,6 @@ export function turnToward(a: number, b: number, maxStep: number): number {
   return Math.abs(d) <= maxStep ? b : a + Math.sign(d) * maxStep;
 }
 
-export function angleLerp(a: number, b: number, t: number): number {
-  return wrapAngle(a + angleDelta(a, b) * t);
-}
-
 export const dist2 = (a: Vec2, b: Vec2): number => {
   const dx = a.x - b.x;
   const dy = a.y - b.y;
@@ -48,13 +44,6 @@ export const dist2 = (a: Vec2, b: Vec2): number => {
 };
 
 export const dist = (a: Vec2, b: Vec2): number => Math.sqrt(dist2(a, b));
-
-export const len = (v: Vec2): number => Math.hypot(v.x, v.y);
-
-export function normalize(v: Vec2): Vec2 {
-  const l = Math.hypot(v.x, v.y);
-  return l < 1e-9 ? vec(0, 0) : vec(v.x / l, v.y / l);
-}
 
 /**
  * Where to aim to hit a target that keeps moving.

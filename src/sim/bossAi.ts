@@ -12,7 +12,7 @@ import type { Controller, Tank, TankIntent } from './tank.ts';
 import { idleIntent } from './tank.ts';
 import type { World } from './world.ts';
 import { aiContext } from './ai.ts';
-import { vec, wrapAngle } from '../core/math.ts';
+import { vec } from '../core/math.ts';
 import { predictIntercept } from '../core/math.ts';
 
 /**
@@ -216,7 +216,3 @@ export class BossController implements Controller {
     return boss.behaviour !== 'fortress';
   }
 }
-
-/** True when the given angle is roughly forward of a tank. */
-export const roughlyFacing = (tank: Tank, angle: number): boolean =>
-  Math.abs(wrapAngle(angle - tank.angle)) < 0.6;

@@ -122,9 +122,6 @@ export class SpatialHash {
  */
 export const DEFAULT_ARENA_HALF_SIZE = 1300;
 
-/** Added to the arena half-width each time a boss wave is cleared. */
-export const ARENA_GROWTH_PER_STAGE = 420;
-
 export interface Arena {
   /**
    * Half the arena's extent on each axis. The playfield spans -half to +half.

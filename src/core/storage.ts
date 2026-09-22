@@ -66,10 +66,6 @@ export function saveSettings(patch: Partial<Settings>): Settings {
   return data.settings;
 }
 
-export function bestFor(difficulty: DifficultyId): BestRun | null {
-  return read().best[difficulty] ?? null;
-}
-
 export function allBests(): Partial<Record<DifficultyId, BestRun>> {
   return read().best;
 }

@@ -44,8 +44,6 @@ export interface BossDefinition {
   toughness: number;
   /** Contact damage per tick. */
   bodyDamage: number;
-  /** Experience for killing it. */
-  xp: number;
   /** How it behaves, handled in sim/bossAi.ts. */
   behaviour: 'circler' | 'summoner' | 'fortress' | 'charger' | 'sieger';
   /** A line shown when it arrives. */
@@ -207,7 +205,6 @@ function buildBosses(): Record<BossId, BossDefinition> {
       ]),
       toughness: 1.25,
       bodyDamage: 14,
-      xp: 3000,
       behaviour: 'circler',
       taunt: 'The Guardian wakes.',
     },
@@ -223,7 +220,6 @@ function buildBosses(): Record<BossId, BossDefinition> {
       ]),
       toughness: 0.95,
       bodyDamage: 14,
-      xp: 3000,
       behaviour: 'summoner',
       taunt: 'The Summoner calls its swarm.',
     },
@@ -241,7 +237,6 @@ function buildBosses(): Record<BossId, BossDefinition> {
       ),
       toughness: 1.6,
       bodyDamage: 14,
-      xp: 3000,
       behaviour: 'fortress',
       taunt: 'The Defender rolls in.',
     },
@@ -252,7 +247,6 @@ function buildBosses(): Record<BossId, BossDefinition> {
       def: fallenBooster,
       toughness: 1.1,
       bodyDamage: 14,
-      xp: 3000,
       behaviour: 'charger',
       taunt: 'Something grey and fast is coming.',
     },
@@ -263,7 +257,6 @@ function buildBosses(): Record<BossId, BossDefinition> {
       def: fallenOverlord,
       toughness: 0.8,
       bodyDamage: 14,
-      xp: 3000,
       behaviour: 'sieger',
       taunt: 'The Fallen Overlord takes the field.',
     },

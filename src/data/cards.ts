@@ -9,10 +9,9 @@
 
 import type { StatKey, TankDefinition } from './schema.ts';
 import { STAT_ORDER } from './schema.ts';
-import { statCap } from './tanks.ts';
 import { STAT_COLORS } from './colors.ts';
 import { PERKS, type PerkDefinition, type PerkHost } from '../sim/perkImpl.ts';
-import type { StatBlock } from '../sim/stats.ts';
+import { canRaise, type StatBlock } from '../sim/stats.ts';
 import type { PerkSet } from '../sim/perks.ts';
 import type { Rng } from '../core/rng.ts';
 import type { Difficulty } from './waves.ts';
@@ -71,7 +70,7 @@ export interface DealContext {
 
 /** Stats this tank can still raise. */
 function availableStats(def: TankDefinition, points: StatBlock): StatKey[] {
-  return STAT_ORDER.filter((key) => points[key] < statCap(def, key));
+  return STAT_ORDER.filter((key) => canRaise(def, points, key));
 }
 
 /** Perks not yet maxed out, and that would do something for this build. */

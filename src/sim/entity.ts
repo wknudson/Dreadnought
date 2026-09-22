@@ -132,8 +132,3 @@ export abstract class Entity {
     return e;
   }
 }
-
-/** Resets the id counter. Only for tests. */
-export function resetEntityIds(): void {
-  nextId = 1;
-}

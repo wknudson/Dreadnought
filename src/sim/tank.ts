@@ -20,7 +20,6 @@ import {
 } from './stats.ts';
 import { SQUARE_BODY_RADIUS, BASE_BODY_RADIUS } from '../data/leveling.ts';
 import type { TankDefinition } from '../data/schema.ts';
-import { COLORS } from '../data/colors.ts';
 import { vec, type Vec2 } from '../core/math.ts';
 import { AutoTurret } from './turret.ts';
 import type { DroneCommander, DroneOrders } from './projectiles.ts';
@@ -298,12 +297,3 @@ export class Tank extends Entity implements BarrelOwner, DroneCommander {
     });
   }
 }
-
-/** A controller that does nothing, for tanks parked in a menu preview. */
-export class NullController implements Controller {
-  tick(): TankIntent {
-    return idleIntent();
-  }
-}
-
-export const DEFAULT_PLAYER_COLOR = COLORS.playerBlue;

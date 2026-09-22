@@ -23,9 +23,6 @@ export const CARD_LEVELS: ReadonlySet<number> = new Set([
 /** Levels at which a class upgrade becomes available. */
 export const CLASS_LEVELS: readonly number[] = [15, 30, 45];
 
-/** Total cards a run can collect, which is diep.io's 33 stat points. */
-export const TOTAL_CARDS = CARD_LEVELS.size;
-
 export function xpForLevel(level: number): number {
   if (level <= 1) return 0;
   return XP_TABLE[Math.min(level, MAX_LEVEL)] ?? XP_TABLE[MAX_LEVEL]!;
@@ -91,6 +88,3 @@ export const projectileHealth = (points: number, healthMult: number): number =>
 /** Lifetime in ticks. A lifeLength of -1 means the projectile never expires. */
 export const projectileLifeTicks = (lifeLength: number): number =>
   lifeLength < 0 ? Number.POSITIVE_INFINITY : lifeLength * 75;
-
-/** Traps measure their lifetime on a different scale from bullets. */
-export const trapLifeTicks = (lifeLength: number): number => lifeLength * 75;

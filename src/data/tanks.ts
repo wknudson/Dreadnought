@@ -19,14 +19,6 @@ export function getTank(id: TankId): TankDefinition {
   return def;
 }
 
-export function hasTank(id: TankId): boolean {
-  return BY_ID.has(id);
-}
-
-export function tanksOfTier(tier: 1 | 2 | 3 | 4): TankDefinition[] {
-  return TANKS.filter((t) => t.tier === tier);
-}
-
 /**
  * The upgrade choices available to a tank at a given level.
  *
@@ -39,11 +31,6 @@ export function upgradeChoices(id: TankId, level: number): TankDefinition[] {
     .upgradesTo.map(getTank)
     .filter((child) => level >= child.unlockLevel)
     .sort((a, b) => a.tier - b.tier || a.name.localeCompare(b.name));
-}
-
-/** Whether this tank still has any upgrade the player could reach. */
-export function hasFurtherUpgrades(id: TankId): boolean {
-  return getTank(id).upgradesTo.length > 0;
 }
 
 /** The stats this tank actually uses, in sidebar order, with its own labels applied. */
