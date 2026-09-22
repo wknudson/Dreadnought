@@ -216,7 +216,7 @@ export const MODIFIERS: readonly ArenaModifier[] = [
   },
   {
     /*
-     * Built, tested, and held out of the pool until a person has played it.
+     * The one modifier the harness cannot judge, shipped on a person's say-so.
      *
      * Over 64 seeds at wave twenty the Crush and the Tide clear 29 against 32
      * for a clean wave, which is the neutrality they were built for. Meteors
@@ -233,12 +233,13 @@ export const MODIFIERS: readonly ArenaModifier[] = [
      * not be treated as any.
      *
      * A human dodges most of these, and at a fifth of the blasts taken the
-     * arithmetic lands somewhere reasonable — which is a guess, and guessing is
-     * the reason this is not in the pool. Turning `live` on is the whole of
-     * shipping it, once someone has played a wave of it and said.
+     * arithmetic lands somewhere reasonable. That was a guess, so this sat out
+     * of the pool until 2026-09-22, when it was switched on at the player's
+     * request. Playtesting, not `npm run fight`, is what decides whether it
+     * stays; if it has to come out again, `live: false` is the whole of that.
      */
     id: 'meteors',
-    live: false,
+    live: true,
     name: 'METEORS',
     budgetShare: 0.22,
     tick: tickMeteors,
@@ -260,16 +261,18 @@ export const getModifier = (id: ModifierId): ArenaModifier =>
  * own, and rolling a second one on top would be two fights arguing.
  */
 export const MODIFIED_WAVES: readonly number[] = [10, 15];
-// Two waves because two modifiers are live. It grows with the pool: a run draws
-// without replacement, so more waves than modifiers would leave the last of them
-// reliably plain, which is a worse pattern than one fewer modified wave.
+// Two waves against three live modifiers, so a run meets two of the three and
+// which one it misses changes with the seed. Never more waves than modifiers: a
+// run draws without replacement, so the extra wave would be reliably plain,
+// which is a worse pattern than one fewer modified wave. Wave twenty is the one
+// left to add if every run should see all three.
 
 /**
  * Picks the modifiers a run will use, in the order it will meet them.
  *
  * Drawn without replacement, so a run gets a different one on each modified
- * wave rather than the same one twice, and drawn once at the start from the run's own seed, so a seed
- * reproduces its whole arc rather than just its waves.
+ * wave rather than the same one twice, and drawn once at the start from the
+ * run's own seed, so a seed reproduces its whole arc rather than just its waves.
  */
 export function rollModifiers(rng: Rng): Map<number, ModifierId> {
   const pool = MODIFIERS.filter((m) => m.live).map((m) => m.id);

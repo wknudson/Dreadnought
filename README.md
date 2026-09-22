@@ -94,12 +94,12 @@ hard they hit, how long the break between waves is, and how much experience
 kills pay. Hard also deals perks more often than stat cards.
 
 The arena starts small and widens after each boss. Waves 10 and 15 each draw an
-arena modifier, never the same one twice in a run: **The Crush** closes the
-room steadily, and **The Tide** leans it between wide and tall before settling
-narrow. A modifier is paid for out of the wave's enemy budget, so it changes
-the fight rather than adding to it. A third, **Meteors**, is built and reachable
-from `npm run fight -- --modifier meteors` but held out of the game until it has
-been playtested; setting `live: true` on it in `src/sim/modifiers.ts` ships it.
+arena modifier from three, never the same one twice in a run: **The Crush**
+closes the room steadily, **The Tide** leans it between wide and tall before
+settling narrow, and **Meteors** drops warned blasts across the floor. A
+modifier is paid for out of the wave's enemy budget, so it changes the fight
+rather than adding to it. The bot never dodges, so the harnesses cannot judge
+Meteors; playtesting is what decides whether it stays.
 
 The last boss, the Fallen Overlord, has an authored arena of its own
 (`src/sim/finale.ts`). At two thirds and one third of its health the room
