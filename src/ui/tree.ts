@@ -15,6 +15,22 @@ import { artExtent, drawTank } from '../render/drawTank.ts';
 import { clamp, vec, type Vec2 } from '../core/math.ts';
 import { el, button } from './dom.ts';
 import { describeTank } from './describe.ts';
+import { markedCount, type Codex } from '../core/codex.ts';
+import type { DifficultyId } from '../core/storage.ts';
+
+/** Medal colours for a codex mark, by the hardest difficulty it was won on. */
+const MEDAL: Readonly<Record<DifficultyId, string>> = {
+  easy: '#CD8B52',
+  // Darker than a true silver, which vanishes against the grey grid.
+  normal: '#A9B2BD',
+  hard: '#FFD24A',
+};
+
+const DIFFICULTY_NAME: Readonly<Record<DifficultyId, string>> = {
+  easy: 'Easy',
+  normal: 'Normal',
+  hard: 'Hard',
+};
 
 /** Ring radius for each tier, in tree-space units. */
 const RING_RADIUS = [0, 320, 620, 960];
@@ -135,6 +151,8 @@ export class TreeViewer {
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly color: string,
+    /** Which tanks the player has won with, for the medals and the detail row. */
+    private readonly codex: Codex,
     onBack: () => void,
   ) {
     this.order = [...this.nodes.values()].sort((a, b) => a.def.tier - b.def.tier);
@@ -148,7 +166,7 @@ export class TreeViewer {
         { class: 'tree-bar' },
         button('Back', onBack, { class: 'btn btn-small' }),
         el('h2', { class: 'tree-title' }, 'Tank Tree'),
-        el('span', { class: 'tree-count' }, `${TANKS.length} tanks`),
+        el('span', { class: 'tree-count' }, `${TANKS.length} tanks · ${markedCount(codex)} won`),
       ),
       el('aside', { class: 'tree-side' }, this.preview, this.detail),
     );
@@ -302,6 +320,9 @@ export class TreeViewer {
     const kinds = new Set(def.barrels.map((b) => b.projectile.kind));
     if (kinds.size) rows.push(row('Fires', [...kinds].join(', ')));
 
+    const won = this.codex[def.id];
+    rows.push(row('Codex', won ? `Won on ${DIFFICULTY_NAME[won]}` : 'Not yet won'));
+
     this.detail.replaceChildren(
       el('h3', {}, def.name),
       el('p', { class: 'tree-blurb' }, describeTank(def)),
@@ -420,6 +441,24 @@ export class TreeViewer {
     ctx.restore();
   }
 
+  /**
+   * A codex mark: a small disc on the node's upper right, coloured by the
+   * hardest difficulty the tank has been won on. It is sized in screen pixels
+   * with a floor, so it stays readable with the whole tree in view.
+   */
+  private drawMedal(ctx: CanvasRenderingContext2D, x: number, y: number, won: DifficultyId): void {
+    const r = Math.max(5, 9 * Math.min(1.2, this.zoom));
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = MEDAL[won];
+    ctx.fill();
+    ctx.lineWidth = Math.max(1.5, r * 0.3);
+    ctx.strokeStyle = outline(MEDAL[won]);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   private drawNode(ctx: CanvasRenderingContext2D, node: Node): void {
     const s = this.treeToScreen(node.pos);
     const radius = node.radius * this.zoom;
@@ -447,6 +486,9 @@ export class TreeViewer {
     const icon = tankIcon(node.def, iconSize, this.color);
     const drawn = reach * 2 * (iconSize / (iconSize * 0.92)) * 0.92;
     ctx.drawImage(icon, s.x - drawn / 2, s.y - drawn / 2, drawn, drawn);
+
+    const won = this.codex[node.def.id];
+    if (won) this.drawMedal(ctx, s.x + reach * 0.72, s.y - reach * 0.72, won);
 
     // Names are the point of this screen, so they stay on unless the view is
     // zoomed far enough out that they would overlap into noise.

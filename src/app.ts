@@ -2,8 +2,10 @@ import { FixedLoop, SECONDS_PER_TICK } from './core/loop.ts';
 import { InputManager, emptyIntent, type Intent } from './core/input.ts';
 import { seedFromLocation } from './core/rng.ts';
 import {
+  loadCodex,
   loadSettings,
   recordRun,
+  recordWin,
   saveSettings,
   type DifficultyId,
   type Settings,
@@ -15,6 +17,7 @@ import { clearIconCache } from './render/iconCache.ts';
 import { Run, type PendingChoice } from './sim/run.ts';
 import { PLAYER_COLORS } from './data/colors.ts';
 import { vec } from './core/math.ts';
+import { isColorUnlocked, markedCount } from './core/codex.ts';
 import { clearUi, mount } from './ui/dom.ts';
 import { buildDeath, buildPause, buildTitle } from './ui/title.ts';
 import { buildCardChoice, buildClassUpgrade, buildVictory } from './ui/overlays.ts';
@@ -200,9 +203,16 @@ export class App {
     this.loop.start();
   }
 
-  /** The colour the player picked, as a hex string. */
+  /**
+   * The colour the player picked, as a hex string.
+   *
+   * Falls back to the first colour if the saved one is unknown or not yet
+   * unlocked, which can happen when only part of the save survived.
+   */
   get playerColor(): string {
-    return (PLAYER_COLORS.find((c) => c.id === this.settings.colorId) ?? PLAYER_COLORS[0]!).hex;
+    const picked = PLAYER_COLORS.find((c) => c.id === this.settings.colorId);
+    const usable = picked && isColorUnlocked(picked, markedCount(loadCodex()));
+    return (usable ? picked : PLAYER_COLORS[0]!).hex;
   }
 
   private resize(): void {
@@ -263,7 +273,7 @@ export class App {
     this.closeTree();
     this.treeReturn = from;
     this.screen = 'tree';
-    this.tree = new TreeViewer(this.canvas, this.playerColor, () => {
+    this.tree = new TreeViewer(this.canvas, this.playerColor, loadCodex(), () => {
       if (this.treeReturn === 'run' && this.run) this.resumeRun();
       else this.showTitle();
     });
@@ -346,6 +356,9 @@ export class App {
       seed: run.seed,
     };
     const isBest = recordRun(run.difficultyId, summary);
+    // Only a win marks the codex. Giving up comes through here too, still
+    // 'alive', and a death never counts.
+    if (run.outcome === 'won') recordWin(run.classPath, run.difficultyId);
     this.screen = 'dead';
     this.overlay = null;
 

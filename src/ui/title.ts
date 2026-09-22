@@ -2,13 +2,15 @@
  * The title screen, and the pause and death overlays.
  *
  * Each builder returns a detached element and takes a callback for every button.
- * The title reads the saved bests to show beside each difficulty but writes
- * nothing itself; the colour and difficulty picked go back through the callbacks
+ * The title reads the saved bests to show beside each difficulty, and the codex
+ * to know which colours are open, but writes nothing itself; the colour and difficulty picked go back through the callbacks
  * for the caller to keep.
  */
 
 import { PLAYER_COLORS } from '../data/colors.ts';
-import { allBests, type DifficultyId } from '../core/storage.ts';
+import { allBests, loadCodex, type DifficultyId } from '../core/storage.ts';
+import { isColorUnlocked, markedCount, nextColorUnlock } from '../core/codex.ts';
+import { TANKS } from '../data/tanks.ts';
 import { getTank, ROOT_TANK_ID } from '../data/tanks.ts';
 import { paintTankInto } from '../render/iconCache.ts';
 import { el, button } from './dom.ts';
@@ -40,10 +42,17 @@ export interface TitleOptions {
  * The title screen.
  *
  * The colour swatches are real tanks drawn by the same renderer the game uses,
- * so what you pick is exactly what you get.
+ * so what you pick is exactly what you get. Colours the codex has not unlocked
+ * are still drawn, dimmed, so the player can see what they are working towards.
  */
 export function buildTitle(options: TitleOptions): HTMLElement {
-  let colorId = options.colorId;
+  const won = markedCount(loadCodex());
+  const open = (id: string): boolean => {
+    const color = PLAYER_COLORS.find((c) => c.id === id);
+    return !!color && isColorUnlocked(color, won);
+  };
+  // A saved colour that is not open falls back the same way the game does.
+  let colorId = open(options.colorId) ? options.colorId : PLAYER_COLORS[0]!.id;
   let difficulty = options.difficulty;
 
   const bests = allBests();
@@ -53,13 +62,18 @@ export function buildTitle(options: TitleOptions): HTMLElement {
     const canvas = el('canvas', { class: 'swatch-canvas', width: 64, height: 64 });
     canvas.style.width = '64px';
     canvas.style.height = '64px';
+    const locked = !isColorUnlocked(color, won);
+    const lockText = `${color.name}: win with ${color.unlockAt} tanks to unlock`;
     const wrap = el('button', {
       type: 'button',
-      class: `swatch${color.id === colorId ? ' is-selected' : ''}`,
-      'aria-label': color.name,
+      class: `swatch${color.id === colorId ? ' is-selected' : ''}${locked ? ' is-locked' : ''}`,
+      'aria-label': locked ? lockText : color.name,
+      title: locked ? lockText : color.name,
+      'aria-disabled': locked ? 'true' : undefined,
       'data-color': color.id,
     }, canvas);
     wrap.addEventListener('click', () => {
+      if (locked) return;
       colorId = color.id;
       for (const other of swatches) other.classList.toggle('is-selected', other.dataset.color === colorId);
       options.onColorChange(colorId);
@@ -111,6 +125,7 @@ export function buildTitle(options: TitleOptions): HTMLElement {
 
       el('h2', { class: 'section' }, 'Your tank'),
       el('div', { class: 'swatches' }, ...swatches),
+      el('p', { class: 'codex-progress' }, codexLine(won)),
 
       el('h2', { class: 'section' }, 'Difficulty'),
       el('div', { class: 'difficulties' }, ...difficultyButtons),
@@ -125,6 +140,13 @@ export function buildTitle(options: TitleOptions): HTMLElement {
       el('p', { class: 'hint' }, controlHint()),
     ),
   );
+}
+
+/** How far the codex has come, and what it is working towards. */
+function codexLine(won: number): string {
+  const next = nextColorUnlock(won);
+  const tail = next === null ? 'every colour unlocked' : `next colour at ${next}`;
+  return `Codex ${won} / ${TANKS.length} won · ${tail}`;
 }
 
 /** The pause overlay, shown over a frozen run. */

@@ -173,6 +173,23 @@ body {
   background: rgba(255, 255, 255, 0.18);
 }
 
+/* Not yet won: still drawn, so the player can see what the codex is for. */
+.swatch.is-locked {
+  cursor: not-allowed;
+  opacity: 0.35;
+  filter: grayscale(0.6);
+}
+
+.swatch.is-locked:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.codex-progress {
+  margin: -16px 0 26px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
 .swatch-canvas {
   display: block;
 }

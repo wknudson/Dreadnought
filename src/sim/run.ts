@@ -103,6 +103,11 @@ export class Run implements PerkHost {
   hand: Card[] = [];
 
   outcome: RunOutcome = 'alive';
+  /**
+   * Every class the player has been this run, in order, starting from Basic.
+   * A win credits all of them in the codex, not only the last.
+   */
+  readonly classPath: string[] = [ROOT_TANK_ID];
   /** Ticks since the player died, so the explosion can finish. */
   ticksSinceDeath = 0;
 
@@ -293,6 +298,7 @@ export class Run implements PerkHost {
   upgradeTo(tankId: string): void {
     const def = getTank(tankId);
     const refunded = this.player.upgradeTo(def);
+    if (this.classPath[this.classPath.length - 1] !== def.id) this.classPath.push(def.id);
     // Points stranded on stats the new class does not have come back as cards.
     for (let i = 0; i < refunded; i++) this.pendingChoices.push('card');
     this.consumeChoice('class');

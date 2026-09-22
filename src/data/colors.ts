@@ -36,14 +36,26 @@ export const COLORS = {
   scoreBar: '#43FF91',
 } as const;
 
-/** Body colours a player may pick at the start of a run. */
-export const PLAYER_COLORS: readonly { id: string; name: string; hex: string }[] = [
+/**
+ * Body colours a player may pick at the start of a run.
+ *
+ * The first six are open from the start. The rest unlock as the codex fills,
+ * at the number of won tanks in `unlockAt`, and the last needs all fifty.
+ * Nothing here is red, because red is what the enemies are.
+ */
+export const PLAYER_COLORS: readonly { id: string; name: string; hex: string; unlockAt?: number }[] = [
   { id: 'blue', name: 'Blue', hex: '#00B2E1' },
   { id: 'green', name: 'Green', hex: '#00E16E' },
   { id: 'purple', name: 'Purple', hex: '#BF7FF5' },
   { id: 'gold', name: 'Gold', hex: '#FFE869' },
   { id: 'pink', name: 'Pink', hex: '#F177DD' },
   { id: 'teal', name: 'Teal', hex: '#43FFF9' },
+  { id: 'orange', name: 'Orange', hex: '#FF8F3F', unlockAt: 3 },
+  { id: 'lime', name: 'Lime', hex: '#A4E34D', unlockAt: 8 },
+  { id: 'silver', name: 'Silver', hex: '#B8BEC6', unlockAt: 15 },
+  { id: 'navy', name: 'Navy', hex: '#3A55C9', unlockAt: 25 },
+  { id: 'ivory', name: 'Ivory', hex: '#F2EEDD', unlockAt: 40 },
+  { id: 'obsidian', name: 'Obsidian', hex: '#3B3B45', unlockAt: 50 },
 ];
 
 /** Stat bar colours, keyed to match STAT_ORDER. */
