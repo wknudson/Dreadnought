@@ -12,6 +12,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  colorsUnlockedBetween,
   isColorUnlocked,
   markWin,
   markedCount,
@@ -85,4 +86,26 @@ test('a run remembers every class it took, starting from Basic', () => {
   // Choosing the class you already are is not a step.
   run.upgradeTo('overseer');
   assert.deepEqual(run.classPath, [ROOT_TANK_ID, 'sniper', 'overseer']);
+});
+
+test('a win names the colours it crossed, and only those', () => {
+  const thresholds = PLAYER_COLORS.flatMap((c) => (c.unlockAt === undefined ? [] : [c.unlockAt]));
+  const [first, second] = [thresholds[0]!, thresholds[1]!];
+  assert.deepEqual(colorsUnlockedBetween(first, first), [], 'no change, nothing unlocked');
+  assert.deepEqual(
+    colorsUnlockedBetween(first - 1, first).map((c) => c.unlockAt),
+    [first],
+    'landing exactly on a threshold unlocks it',
+  );
+  assert.deepEqual(
+    colorsUnlockedBetween(first, first + 1).map((c) => c.unlockAt),
+    [],
+    'a colour already open is not unlocked again',
+  );
+  assert.deepEqual(
+    colorsUnlockedBetween(0, second).map((c) => c.unlockAt),
+    [first, second],
+    'one big win can cross two',
+  );
+  assert.ok(colorsUnlockedBetween(0, 0).length === 0, 'the free colours never count as unlocks');
 });

@@ -17,7 +17,8 @@ import { clearIconCache } from './render/iconCache.ts';
 import { Run, type PendingChoice } from './sim/run.ts';
 import { PLAYER_COLORS } from './data/colors.ts';
 import { vec } from './core/math.ts';
-import { isColorUnlocked, markedCount } from './core/codex.ts';
+import { colorsUnlockedBetween, isColorUnlocked, markedCount } from './core/codex.ts';
+import { TANKS } from './data/tanks.ts';
 import { clearUi, mount } from './ui/dom.ts';
 import { buildDeath, buildPause, buildTitle } from './ui/title.ts';
 import { buildCardChoice, buildClassUpgrade, buildVictory } from './ui/overlays.ts';
@@ -358,7 +359,16 @@ export class App {
     const isBest = recordRun(run.difficultyId, summary);
     // Only a win marks the codex. Giving up comes through here too, still
     // 'alive', and a death never counts.
-    if (run.outcome === 'won') recordWin(run.classPath, run.difficultyId);
+    const before = markedCount(loadCodex());
+    const changed = run.outcome === 'won' ? recordWin(run.classPath, run.difficultyId) : [];
+    const after = markedCount(loadCodex());
+    const codex = {
+      added: after - before,
+      raised: changed.length - (after - before),
+      total: after,
+      of: TANKS.length,
+      unlocked: colorsUnlockedBetween(before, after).map((c) => c.name),
+    };
     this.screen = 'dead';
     this.overlay = null;
 
@@ -369,6 +379,7 @@ export class App {
             level: summary.level,
             tank: summary.tank,
             seed: summary.seed,
+            codex,
             onAgain: () => this.startRun(),
             onTitle: () => this.showTitle(),
           })

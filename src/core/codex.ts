@@ -71,6 +71,10 @@ export const markedCount = (codex: Codex): number => Object.keys(codex).length;
 export const isColorUnlocked = (color: { unlockAt?: number }, count: number): boolean =>
   count >= (color.unlockAt ?? 0);
 
+/** The colours a codex opened in going from one total to another. */
+export const colorsUnlockedBetween = (before: number, after: number): typeof PLAYER_COLORS =>
+  PLAYER_COLORS.filter((c) => c.unlockAt !== undefined && c.unlockAt > before && c.unlockAt <= after);
+
 /** The codex total that unlocks the next colour, or null once every one is open. */
 export function nextColorUnlock(count: number): number | null {
   const ahead = PLAYER_COLORS.map((c) => c.unlockAt ?? 0).filter((at) => at > count);

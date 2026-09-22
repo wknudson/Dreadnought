@@ -111,7 +111,8 @@ the Overlord also marks the Overseer, Sniper and Basic Tank on the way there.
 Each mark keeps the hardest difficulty it was won on, shown as a bronze, silver
 or gold medal on the tank tree. Dying or giving up marks nothing. The codex
 never makes a run easier; what it unlocks is tank colours, a new one at 3, 8,
-15, 25, 40 and all 50 tanks won, and the title screen shows how far it has come.
+15, 25, 40 and all 50 tanks won. The victory screen says what a win added and
+any colour it unlocked, and the title screen shows how far the codex has come.
 
 The Tank Tree button on the title screen opens the whole upgrade tree as a
 radial map. Drag to pan, scroll or pinch to zoom, and click a tank to see its

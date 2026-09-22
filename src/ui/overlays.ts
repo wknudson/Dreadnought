@@ -132,8 +132,20 @@ export interface RunWonOptions {
   level: number;
   tank: string;
   seed: number;
+  /** What the win did to the codex. */
+  codex: { added: number; raised: number; total: number; of: number; unlocked: string[] };
   onAgain(): void;
   onTitle(): void;
+}
+
+/** One line on what a win put in the codex, which a repeat win may be nothing. */
+function codexSummary(codex: RunWonOptions['codex']): string {
+  const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const parts: string[] = [];
+  if (codex.added) parts.push(`${plural(codex.added, 'new tank')} won`);
+  if (codex.raised) parts.push(`${plural(codex.raised, 'medal')} raised`);
+  const what = parts.length ? parts.join(', ') : 'nothing new';
+  return `Codex: ${what} · ${codex.total} / ${codex.of}`;
 }
 
 /** Shown when the final wave falls. */
@@ -160,6 +172,10 @@ export function buildVictory(options: RunWonOptions): HTMLElement {
           el('span', { class: 'k' }, 'Score'),
         ),
       ),
+      el('p', { class: 'victory-codex' }, codexSummary(options.codex)),
+      options.codex.unlocked.length
+        ? el('p', { class: 'victory-unlock' }, `Unlocked: ${options.codex.unlocked.join(', ')}`)
+        : null,
       el('p', { class: 'hint' }, `Seed ${options.seed}`),
       el(
         'div',

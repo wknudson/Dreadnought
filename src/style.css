@@ -286,6 +286,20 @@ body {
   font-size: 15px;
 }
 
+.victory-codex {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* The one line on this screen that is news, so it is the one that stands out. */
+.victory-unlock {
+  margin: 6px 0 0;
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 15px;
+}
+
 /* --- Choice panels (class upgrades and cards) ---------------------------- */
 
 .panel-wide {
