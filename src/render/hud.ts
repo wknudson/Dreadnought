@@ -1,3 +1,13 @@
+/**
+ * The heads-up display, drawn on the canvas in screen space over the world.
+ *
+ * The level and score bars, the wave status, the perk list and its tooltip, the
+ * minimap and the wave banner, along with the touch joysticks and the debug
+ * readout. The game's figures are read from the run each frame rather than kept
+ * here; the only state passed in is the banner's text and timing. The stat column
+ * is drawn by statColumn.ts.
+ */
+
 import type { Run } from '../sim/run.ts';
 import { Tank } from '../sim/tank.ts';
 import { COLORS } from '../data/colors.ts';

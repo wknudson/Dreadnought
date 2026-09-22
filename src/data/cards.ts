@@ -1,3 +1,12 @@
+/**
+ * The cards a level-up offers, and the dealing of a hand of them.
+ *
+ * A card is a stat point, a perk, or a heal offered when there is nothing else
+ * left to give. This module decides what goes into a hand and how each card is
+ * named and described; applying the one the player picks is the run's job, and
+ * the perks themselves live in sim/perkImpl.ts.
+ */
+
 import type { StatKey, TankDefinition } from './schema.ts';
 import { STAT_ORDER } from './schema.ts';
 import { statCap } from './tanks.ts';

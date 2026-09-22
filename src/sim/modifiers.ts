@@ -9,9 +9,9 @@ import type { WarningRing } from './waves.ts';
  * Things the arena does to a boss wave.
  *
  * The map is a square that grows, and a square that grows is the same square
- * every run. These are the answer: on three of the five boss waves the arena
- * takes a hand, drawn from a pool so a run sees three of them and no two runs
- * see the same three.
+ * every run. These are the answer: on the boss waves in `MODIFIED_WAVES` the
+ * arena takes a hand, each drawn from the live pool without replacement, so a
+ * run never meets the same one twice and the order changes from seed to seed.
  *
  * They are deliberately not extra difficulty. A wave that fights you with its
  * walls as well as its enemies is simply a harder wave, and the run does not
@@ -267,8 +267,8 @@ export const MODIFIED_WAVES: readonly number[] = [10, 15];
 /**
  * Picks the modifiers a run will use, in the order it will meet them.
  *
- * Drawn without replacement, so a run gets three different ones rather than the
- * same one twice, and drawn once at the start from the run's own seed, so a seed
+ * Drawn without replacement, so a run gets a different one on each modified
+ * wave rather than the same one twice, and drawn once at the start from the run's own seed, so a seed
  * reproduces its whole arc rather than just its waves.
  */
 export function rollModifiers(rng: Rng): Map<number, ModifierId> {

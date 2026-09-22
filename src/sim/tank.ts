@@ -1,3 +1,12 @@
+/**
+ * Tanks, and the controller interface that decides what they do.
+ *
+ * Holds `Tank`, the `TankIntent` a controller returns each tick, the idle
+ * intent, and a controller that does nothing. The controllers with opinions live
+ * elsewhere: the player's in run.ts, the enemies' in ai.ts and the bosses' in
+ * bossAi.ts.
+ */
+
 import { Entity, type EntityKind } from './entity.ts';
 import type { World } from './world.ts';
 import { integrate } from './physics.ts';

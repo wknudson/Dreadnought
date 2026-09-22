@@ -1,3 +1,12 @@
+/**
+ * The world, and the machinery it runs on.
+ *
+ * Besides `World`, which owns the entities and the tick order, this holds the
+ * typed event bus systems talk through, the spatial hash for finding what is
+ * nearby, the arena's bounds and how they move, and the death effects left
+ * behind. It knows nothing of waves or perks; the run layers those on top.
+ */
+
 import { Rng } from '../core/rng.ts';
 import { type Vec2, vec } from '../core/math.ts';
 import { DEATH_TICKS, type Entity } from './entity.ts';

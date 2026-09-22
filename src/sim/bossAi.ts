@@ -1,3 +1,12 @@
+/**
+ * How the bosses move, and when they turn.
+ *
+ * Holds the boss controller and the enrage threshold it acts on. It steers, aims
+ * and pulls the trigger, and nothing more: a boss's weapons, bulk and health are
+ * set in data/bosses.ts and by the wave director that spawns it, so the enrage
+ * reaches the barrels by asking the tank to refresh rather than by touching them.
+ */
+
 import type { BossDefinition } from '../data/bosses.ts';
 import type { Controller, Tank, TankIntent } from './tank.ts';
 import { idleIntent } from './tank.ts';

@@ -1,3 +1,12 @@
+/**
+ * The title screen, and the pause and death overlays.
+ *
+ * Each builder returns a detached element and takes a callback for every button.
+ * The title reads the saved bests to show beside each difficulty but writes
+ * nothing itself; the colour and difficulty picked go back through the callbacks
+ * for the caller to keep.
+ */
+
 import { PLAYER_COLORS } from '../data/colors.ts';
 import { allBests, type DifficultyId } from '../core/storage.ts';
 import { getTank, ROOT_TANK_ID } from '../data/tanks.ts';
@@ -9,7 +18,7 @@ function controlHint(): string {
   const touch = (navigator.maxTouchPoints ?? 0) > 0;
   return touch
     ? 'Left thumb to drive, right thumb to aim and fire. ALT is the secondary action, AUTO holds the trigger down.'
-    : 'Move with WASD. Aim with the mouse, fire with click or space. E toggles auto-fire, C auto-spin, Escape pauses.';
+    : 'Move with WASD. Aim with the mouse, fire with click or space. Right click or Shift is the secondary action. E toggles auto-fire, C auto-spin, Escape pauses.';
 }
 
 const DIFFICULTIES: { id: DifficultyId; name: string; blurb: string }[] = [

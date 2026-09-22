@@ -1,3 +1,13 @@
+/**
+ * Canvas drawing for tanks and anything shaped like one.
+ *
+ * Holds `drawTank` and the pieces it is built from, the bodies, barrels, addons
+ * and turrets, along with the polygon path the world renderer borrows for shapes
+ * and `artExtent`, which icons use to size themselves. It draws from a
+ * definition and a handful of options and never reads the simulation, which is
+ * what lets the menus use it without a run.
+ */
+
 import type { Addon, BarrelDefinition, TankDefinition } from '../data/schema.ts';
 import { COLORS, mix, outline } from '../data/colors.ts';
 import { BASE_BODY_RADIUS } from '../data/leveling.ts';

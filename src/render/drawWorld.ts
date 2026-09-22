@@ -1,3 +1,13 @@
+/**
+ * Draws the arena and everything in it, in world space, for one frame.
+ *
+ * Positions and angles are interpolated between the last two ticks by `alpha`,
+ * so motion stays smooth whatever the display rate. Entities are sorted into
+ * layers first, so tanks sit above shapes and shots, and health bars and names go
+ * on top in passes of their own. Screen-space furniture such as the score and the
+ * minimap belongs to hud.ts instead.
+ */
+
 import type { Camera } from './camera.ts';
 import type { World, DeathEffect } from '../sim/world.ts';
 import type { WarningRing } from '../sim/waves.ts';

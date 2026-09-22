@@ -1,3 +1,12 @@
+/**
+ * The bosses: who they are, the order they arrive in, and what they fight with.
+ *
+ * Only the data lives here. How each one moves is its `behaviour`, which
+ * sim/bossAi.ts acts on, and the health one gets on a given wave comes from the
+ * curve in data/waves.ts scaled by its `toughness`. The definitions are built
+ * on the first call to `getBoss` and cached after that.
+ */
+
 import type { BarrelDefinition, TankDefinition } from './schema.ts';
 import { COLORS } from './colors.ts';
 import { getTank } from './tanks.ts';

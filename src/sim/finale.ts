@@ -12,8 +12,8 @@ import { Drone } from './projectiles.ts';
  * spends the first four bosses learning to circle, and this one takes circling
  * away twice before taking everything away.
  *
- * Authored rather than rolled. A run that reaches wave twenty-five has an hour
- * in it, and losing that to a shape the run happened to draw is a worse story
+ * Authored rather than rolled. A run that reaches wave twenty-five has twenty
+ * minutes in it, and losing that to a shape the run happened to draw is a worse story
  * than losing it to a shape you were supposed to have learned.
  */
 

@@ -1,3 +1,13 @@
+/**
+ * Turns stat points into the numbers the simulation reads.
+ *
+ * A tank's points are a `StatBlock`. From them this derives its health, regen,
+ * body damage and acceleration, and from them and the barrel that fires it a
+ * projectile's damage, health, speed, size and lifetime. The curves themselves
+ * are in data/leveling.ts. It also works out the refund when a new class drops
+ * stats the old one had.
+ */
+
 import type { BarrelDefinition, StatKey, TankDefinition } from '../data/schema.ts';
 import { STAT_ORDER } from '../data/schema.ts';
 import { statCap } from '../data/tanks.ts';

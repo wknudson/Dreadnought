@@ -1,3 +1,12 @@
+/**
+ * The tables and formulas a run is paced by.
+ *
+ * The difficulties, the enemies a wave may spend its budget on, the building of
+ * a wave from that budget, and the curves for boss health, boss threat, enemy
+ * level and arena size all live here. Nothing in this file holds state between
+ * calls; sim/waves.ts is what plays a generated wave out in a live world.
+ */
+
 import type { Rng } from '../core/rng.ts';
 import type { ShapeKind } from './shapes.ts';
 import type { DifficultyId } from '../core/storage.ts';
@@ -25,7 +34,7 @@ export interface Difficulty {
    * The lever that pays for the perk pool existing, and the one that quietly
    * sets how much damage a player brings to a boss. A run deals 33 cards and
    * each slot rolls this independently, so a player ends with about 33 * (1 -
-   * this) stat points: 24.8 at a quarter, 15.8 at a half. Raising it is what
+   * this) stat points: 24.8 at a quarter, 16.5 at a half. Raising it is what
    * recovers the runs a bigger pool costs, and the recovery flattens.
    *
    * It is not tied to how many perks there are, which is the trap. Going from
@@ -287,7 +296,7 @@ export function enemyLevel(playerLevel: number, tier: number, jitter = 0): numbe
  *
  * Generated rather than hand-authored, so the whole difficulty curve lives in
  * the costs and the budget formula above. That keeps tuning to a few numbers
- * instead of thirty hand-written tables.
+ * instead of twenty-five hand-written tables.
  */
 export function generateWave(
   index: number,

@@ -1,3 +1,12 @@
+/**
+ * The polygons and crashers, as data.
+ *
+ * Each kind's size, health, damage, experience and movement tuning, along with
+ * the shiny variant's multipliers and odds. The behaviour that reads these lives
+ * in sim/shape.ts, and which kinds a wave may field, and from when, is decided in
+ * data/waves.ts.
+ */
+
 import { COLORS } from './colors.ts';
 
 export type ShapeKind =

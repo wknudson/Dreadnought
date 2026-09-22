@@ -1,3 +1,12 @@
+/**
+ * Vector and angle helpers used by the simulation, the renderer and the UI.
+ *
+ * Vectors are plain `{ x, y }` objects rather than a class, so an entity's
+ * position can be handed to any of these as it stands. Angles are in radians,
+ * and the helpers here that compare two of them go through `wrapAngle`, so a
+ * turn never takes the long way round.
+ */
+
 export interface Vec2 {
   x: number;
   y: number;

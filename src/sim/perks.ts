@@ -1,3 +1,12 @@
+/**
+ * The perk interface, and the set that dispatches to it.
+ *
+ * This is the contract only: every hook a perk may implement, and `PerkSet`,
+ * which calls them across everything the run has collected. The perks themselves
+ * are in perkImpl.ts, and the run is what wires the set into the player's tank
+ * and the world's events.
+ */
+
 import type { World } from './world.ts';
 import type { Entity } from './entity.ts';
 import type { DerivedTankStats } from './stats.ts';

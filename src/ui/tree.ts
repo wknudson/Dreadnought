@@ -1,3 +1,12 @@
+/**
+ * The tank tree screen: its ring layout, and the viewer that draws it.
+ *
+ * The layout is computed from the roster when the viewer is built rather than
+ * authored, so a new tank finds its place without being positioned by hand. The
+ * nodes are drawn from cached icons, and the selected tank's preview through
+ * `drawTank` itself.
+ */
+
 import { TANKS, getTank, ROOT_TANK_ID, visibleStats } from '../data/tanks.ts';
 import type { TankDefinition } from '../data/schema.ts';
 import { COLORS, outline } from '../data/colors.ts';

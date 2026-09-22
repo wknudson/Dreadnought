@@ -1,3 +1,13 @@
+/**
+ * Movement, collision and contact damage.
+ *
+ * Integration under diep.io's flat friction, the helpers for steering against
+ * it, the rule for who may hurt whom, and the pass that resolves every
+ * overlapping hostile pair. `applyDamage` is the path that turns a hit into the
+ * world's damage and death events, and anything that wants those announced goes
+ * through it.
+ */
+
 import type { Entity } from './entity.ts';
 import type { World } from './world.ts';
 

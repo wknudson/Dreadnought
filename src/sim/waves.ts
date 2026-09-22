@@ -1,3 +1,12 @@
+/**
+ * The wave director, which plays a run's waves out in the live world.
+ *
+ * What a wave contains is decided in data/waves.ts; this file spends it. It owns
+ * the warning rings before each spawn, the setting up of enemies and bosses, the
+ * stragglers sent hunting, the breather between waves and the arena's size, and
+ * it hands a boss wave to its arena modifier or, at the end, to the finale.
+ */
+
 import type { World } from './world.ts';
 import type { Rng } from '../core/rng.ts';
 import { Shape } from './shape.ts';
@@ -219,7 +228,10 @@ export class WaveDirector {
     this.tracked.clear();
   }
 
-  /** Skips straight to a given wave. Used by the in-development wave key. */
+  /**
+   * Skips straight to a given wave. Used by the Shift+K debug key,
+   * which is not gated to dev builds and works on the live site too.
+   */
   jumpTo(wave: number): void {
     this.halt();
     this.beginWave(Math.max(1, wave));

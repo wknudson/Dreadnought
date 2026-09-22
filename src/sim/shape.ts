@@ -1,3 +1,12 @@
+/**
+ * The polygon enemies and how they move.
+ *
+ * The tuning here is about getting a wave to arrive: how far off a shape starts
+ * closing, how much faster it closes, and how fast a straggler is sent after the
+ * player. The per-kind numbers are in data/shapes.ts; this file decides what a
+ * shape does with them each tick.
+ */
+
 import { Entity, type EntityKind } from './entity.ts';
 import type { World } from './world.ts';
 import { integrate, maintainVelocity } from './physics.ts';

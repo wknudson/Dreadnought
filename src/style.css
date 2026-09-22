@@ -269,7 +269,7 @@ body {
   font-size: 15px;
 }
 
-/* --- Choice panels (class upgrades, and later the cards) ----------------- */
+/* --- Choice panels (class upgrades and cards) ---------------------------- */
 
 .panel-wide {
   max-width: min(880px, 94vw);

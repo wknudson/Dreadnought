@@ -1,3 +1,12 @@
+/**
+ * The perks themselves, and what they need from the run.
+ *
+ * `PERKS` is the pool the cards deal from, each entry a definition that builds
+ * its perk when taken. The `Pickup` healing orb lives here because a perk is the
+ * only thing that drops one, and `PerkHost` is the narrow view of the run a perk
+ * is handed. The hooks they implement are declared in perks.ts.
+ */
+
 import type { Perk } from './perks.ts';
 import type { World } from './world.ts';
 import { Entity, type EntityKind } from './entity.ts';

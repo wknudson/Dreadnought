@@ -1,3 +1,13 @@
+/**
+ * Every kind of thing a barrel can fire, and the factory that builds them.
+ *
+ * Bullets, drones, traps, missiles and minions share the `Projectile` base and
+ * differ in how they move. Importing this module registers the factory with
+ * weapon.ts, which is how barrels create projectiles without importing this file
+ * and closing a cycle. Necromancer squares are the exception: the run raises them
+ * through `raiseNecroDrone` rather than having a barrel fire them.
+ */
+
 import { Entity, type EntityKind } from './entity.ts';
 import type { World } from './world.ts';
 import { integrate, maintainVelocity } from './physics.ts';

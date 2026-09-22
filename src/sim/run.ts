@@ -1,3 +1,12 @@
+/**
+ * The run, and the controller that carries the player's input into it.
+ *
+ * Below this is a world and what lives in it. This is where experience, class
+ * choices, cards and perks are attached to that world, and where the decisions
+ * that hold play are queued. The app, the tests and the balance tools all build
+ * a `Run`, which is why its options carry overrides the game itself never uses.
+ */
+
 import { Rng } from '../core/rng.ts';
 import type { Intent } from '../core/input.ts';
 import { World, DEFAULT_ARENA_HALF_SIZE, squareArena } from './world.ts';
@@ -454,7 +463,10 @@ export class Run implements PerkHost {
     );
   }
 
-  /** Grants a level outright. Used by the in-development level key. */
+  /**
+   * Grants a level outright. Used by the Shift+L debug key,
+   * which is not gated to dev builds and works on the live site too.
+   */
   debugGrantLevel(): void {
     if (this.level >= MAX_LEVEL) return;
     this.addXp(Math.max(1, xpForLevel(this.level + 1) - this.xp));

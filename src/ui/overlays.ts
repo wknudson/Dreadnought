@@ -1,3 +1,11 @@
+/**
+ * The decision panels shown during a run, and the victory screen.
+ *
+ * Each builder returns a detached element and reports back through callbacks, so
+ * this module decides what the player is shown while the caller decides what a
+ * pick means and when the panel goes away.
+ */
+
 import { getTank } from '../data/tanks.ts';
 import type { TankDefinition } from '../data/schema.ts';
 import { paintTankInto } from '../render/iconCache.ts';

@@ -1,3 +1,12 @@
+/**
+ * Auto turrets, the self-aiming guns some tanks carry.
+ *
+ * Holds the turret and `Tankish`, the slice of a tank it depends on, declared
+ * here rather than imported so that tank.ts can build turrets without a cycle.
+ * Firing goes through the same barrel host as any other gun; what this file adds
+ * is choosing a target and swinging round to meet it.
+ */
+
 import type { AutoTurretDefinition } from '../data/schema.ts';
 import type { Entity } from './entity.ts';
 import type { World } from './world.ts';

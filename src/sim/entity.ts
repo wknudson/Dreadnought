@@ -1,3 +1,12 @@
+/**
+ * The base every simulated object extends, and the vocabulary they share.
+ *
+ * Besides `Entity` itself this holds the team and kind tags, the shot modifier
+ * signature perks are installed through, and the lengths of the hit flash and the
+ * death animation. Tanks, shapes, projectiles and pickups add their own behaviour
+ * in modules of their own.
+ */
+
 import { type Vec2, vec } from '../core/math.ts';
 import type { World } from './world.ts';
 import type { ProjectileStats } from './stats.ts';
