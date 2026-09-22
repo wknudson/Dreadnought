@@ -610,6 +610,53 @@ test('a chain reaction spreads without recursing forever', () => {
   assert.ok(shapesLeft(run) < before / 2, 'the chain should carry through the pack');
 });
 
+/**
+ * One shot at a square, then off the trigger and long enough for it to land.
+ * Returns the run so the caller can look at what the hit did.
+ */
+function oneShotAt(run: Run, distance = 420): Run {
+  squaresAhead(run, 1, 60, distance);
+  let guard = 0;
+  while (!bulletsIn(run).length && guard++ < 20) advance(run, 1, intent({ fire: true }));
+  advance(run, 30);
+  return run;
+}
+
+// Explosive Rounds and Lifesteal both act in `onProjectileHit`, and both were
+// once dead for a reason of their own after the bullet perks were fixed. These
+// watch the hook's effect rather than its wiring, so neither can go quiet again.
+test('an explosive shot hurts what stands beside its target', () => {
+  const bystander = (perks: string[]): number => {
+    const run = perked(perks);
+    // Far enough off the bullet's line that the shot itself cannot clip it,
+    // and near enough that the blast still reaches it.
+    const side = new Shape(
+      'square',
+      vec(run.player.pos.x + 420, run.player.pos.y + 120),
+      new Rng(99),
+    );
+    run.world.spawn(side);
+    oneShotAt(run);
+    return side.health / side.maxHealth;
+  };
+
+  assert.equal(bystander([]), 1, 'an ordinary shot leaves the square beside it alone');
+  assert.ok(bystander(['explosive']) < 1, 'an explosive one catches it in the blast');
+});
+
+test('lifesteal returns health when a shot lands', () => {
+  const healthAfter = (perks: string[]): number => {
+    const run = perked(perks);
+    run.player.health = run.player.maxHealth / 2;
+    oneShotAt(run);
+    return run.player.health;
+  };
+
+  const plain = healthAfter([]);
+  const stolen = healthAfter(['lifesteal']);
+  assert.ok(stolen > plain, `a hit should heal beyond regen alone, ${plain} against ${stolen}`);
+});
+
 test('a killing spree builds and then fades', () => {
   const run = perked(['spree'], 3);
   squaresAhead(run, 10, 45);

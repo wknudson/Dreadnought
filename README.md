@@ -83,9 +83,10 @@ The bottom left corner carries your eight stats: how many points each has, what
 that currently buys, and how much of it the run has added. The perks you have
 taken stack above them, and hovering one explains what it does.
 
-A run is twenty-five waves with a boss every fifth. Levelling deals a choice of
-three cards, and at levels 15, 30 and 45 you pick a class from the real upgrade
-tree. Dying ends the run; only the best wave and score survive it.
+A run is twenty-five waves with a boss every fifth. From wave 4, enemy tanks
+from the same upgrade tree join the polygons, spawning within two levels of you
+rather than at a level fixed by the wave. Levelling deals a choice of three
+cards, and at levels 15, 30 and 45 you pick a class from the real upgrade tree. Dying ends the run; only the best wave and score survive it.
 
 Easy, Normal and Hard are picked on the title screen and each keeps its own
 best. They change how many enemies a wave buys, how tough they are and how
