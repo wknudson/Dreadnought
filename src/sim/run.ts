@@ -19,7 +19,7 @@ import { CARD_LEVELS, CLASS_LEVELS, levelForXp, MAX_LEVEL, xpForLevel } from '..
 import type { DifficultyId } from '../core/storage.ts';
 import { DIFFICULTIES, arenaSizeForWave, type Difficulty } from '../data/waves.ts';
 import { WaveDirector, type WarningRing } from './waves.ts';
-import { PerkSet } from './perks.ts';
+import { PerkSet, type PerkTell } from './perks.ts';
 import { xpMultiplierFor, type PerkDefinition, type PerkHost } from './perkImpl.ts';
 import { dealCards, type Card } from '../data/cards.ts';
 import { aiContext } from './ai.ts';
@@ -378,6 +378,11 @@ export class Run implements PerkHost {
     if (this.perks.has(def.id)) this.perks.add({ id: def.id, stacks: 1 });
     else this.perks.add(def.create(this));
     this.player.refresh();
+  }
+
+  /** Every perk with the live state it wants shown on the tank, for the renderer. */
+  perkTells(): PerkTell[] {
+    return this.perks.all.map((p) => ({ id: p.id, stacks: p.stacks, gauge: p.gauge?.() ?? [] }));
   }
 
   /** Perks taken so far, for the run summary. */

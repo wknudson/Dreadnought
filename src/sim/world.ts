@@ -22,6 +22,8 @@ export interface DeathEffect {
   sides: number;
   /** Set when a whole tank died, so the effect can draw its barrels too. */
   def: TankDefinition | null;
+  /** Draw only a thin outline, for a ripple rather than a burst. */
+  ring?: boolean;
   /** Counts up to DEATH_TICKS. */
   age: number;
   prevAge: number;

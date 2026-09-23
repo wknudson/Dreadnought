@@ -15,6 +15,7 @@ import { Shape } from './shape.ts';
 import { Projectile } from './projectiles.ts';
 import { applyDamage, integrate, maintainVelocity } from './physics.ts';
 import { COLORS } from '../data/colors.ts';
+import { hullExtent } from '../data/tanks.ts';
 import { vec, type Vec2 } from '../core/math.ts';
 
 /** Everything a perk needs from the run that owns it. */
@@ -100,6 +101,10 @@ export interface PerkDefinition {
   available?(host: PerkHost): boolean;
   create(host: PerkHost): Perk;
 }
+
+/** Colours shared with the tells in render/perkTells.ts, so an effect and its tell match. */
+export const SHIELD_COLOR = '#6FC3FF';
+export const STATIC_FIELD_COLOR = '#7FD1F5';
 
 const isOwnedBy = (projectile: Entity, owner: Entity): boolean =>
   projectile.rootOwner() === owner;
@@ -302,14 +307,26 @@ export const PERKS: readonly PerkDefinition[] = [
     rarity: 'rare',
     weight: 5,
     maxStacks: 3,
-    create: () => {
+    create: (host) => {
       let charges = 1;
       return {
         id: 'shield',
         stacks: 1,
-        onDamageTaken(amount) {
+        gauge: () => [charges],
+        onDamageTaken(amount, _source, world) {
           if (charges <= 0) return amount;
           charges--;
+          // The shell that took the hit breaks, so a spent charge is seen.
+          const tank = host.player;
+          world.addDeath({
+            pos: vec(tank.pos.x, tank.pos.y),
+            angle: tank.angle,
+            radius: tank.radius * hullExtent(tank.def) * shieldShellRadius(charges),
+            color: SHIELD_COLOR,
+            sides: 6,
+            def: null,
+            ring: true,
+          });
           return 0;
         },
         onWaveClear() {
@@ -415,6 +432,7 @@ export const PERKS: readonly PerkDefinition[] = [
       return {
         id: 'spree',
         stacks: 1,
+        gauge: () => charges.map((c) => c / WINDOW),
         modifyStats(stats) {
           stats.reloadScale *= 1 - Math.min(0.55, 0.045 * this.stacks * charges.length);
         },
@@ -517,6 +535,7 @@ export const PERKS: readonly PerkDefinition[] = [
       return {
         id: 'last-stand',
         stacks: 1,
+        gauge: () => [step / 8],
         modifyStats(stats) {
           stats.reloadScale *= 1 - (step / 8) * 0.15 * this.stacks;
         },
@@ -571,21 +590,23 @@ export const PERKS: readonly PerkDefinition[] = [
         onTick(world) {
           tick++;
           if (tick % 5) return;
-          const radius = 110 + 45 * this.stacks;
+          const radius = staticFieldRadius(this.stacks);
           for (const e of world.near(host.player.pos, radius)) {
             if (!e.alive || e.kind === 'projectile') continue;
             if (e.team === 'player' || e.team === 'neutral') continue;
             applyDamage(world, e, 1.2 * this.stacks, host.player);
           }
-          // A pulse once a second, so its reach is seen rather than guessed at.
+          // A ripple once a second, on top of the steady ring the renderer
+          // draws, so the field reads as live rather than painted on.
           if (tick % 25 === 0) {
             world.addDeath({
               pos: vec(host.player.pos.x, host.player.pos.y),
               angle: 0,
               radius,
-              color: '#7FD1F5',
+              color: STATIC_FIELD_COLOR,
               sides: 1,
               def: null,
+              ring: true,
             });
           }
         },
@@ -593,6 +614,12 @@ export const PERKS: readonly PerkDefinition[] = [
     },
   },
 ];
+
+/** A shield shell's size, as a multiple of the hull, for the i-th charge out. */
+export const shieldShellRadius = (i: number): number => 1.35 + 0.38 * i;
+
+/** How far Static Field reaches. The renderer draws its ring from this too. */
+export const staticFieldRadius = (stacks: number): number => 110 + 45 * stacks;
 
 /** Depth of the running Chain Reaction, so a chain cannot recurse without end. */
 let chainDepth = 0;

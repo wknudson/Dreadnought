@@ -11,6 +11,8 @@
 import type { Camera } from './camera.ts';
 import type { World, DeathEffect } from '../sim/world.ts';
 import type { WarningRing } from '../sim/waves.ts';
+import type { PerkTell } from '../sim/perks.ts';
+import { drawPerkTellsOver, drawPerkTellsUnder } from './perkTells.ts';
 import type { Entity } from '../sim/entity.ts';
 import { DEATH_TICKS, FLASH_TICKS } from '../sim/entity.ts';
 import { Tank } from '../sim/tank.ts';
@@ -43,6 +45,8 @@ export function drawWorld(
   width: number,
   height: number,
   warnings: readonly WarningRing[] = [],
+  /** The player's perks, drawn on its tank. */
+  tells: readonly PerkTell[] = [],
 ): void {
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, width, height);
@@ -86,7 +90,13 @@ export function drawWorld(
   for (const e of shapes) drawShape(ctx, e as Shape, alpha);
   for (const e of projectiles) drawProjectile(ctx, e as Projectile, alpha);
   for (const t of enemies) drawTankEntity(ctx, t, alpha);
-  for (const t of players) drawTankEntity(ctx, t, alpha);
+  const time = world.tick - 1 + alpha;
+  for (const t of players) {
+    const pos = lerpPos(t, alpha);
+    drawPerkTellsUnder(ctx, t, pos, tells, time);
+    drawTankEntity(ctx, t, alpha);
+    drawPerkTellsOver(ctx, t, pos, tells, time);
+  }
 
   for (const d of world.deaths) drawDeath(ctx, d, alpha);
 
@@ -327,6 +337,15 @@ function drawDeath(ctx: CanvasRenderingContext2D, d: DeathEffect, alpha: number)
   ctx.translate(d.pos.x, d.pos.y);
   if (d.def) {
     drawTank(ctx, d.def, { color: d.color, angle: d.angle, radius: d.radius * scale });
+  } else if (d.ring) {
+    // A ripple: the outline alone, thin, so it marks a reach without covering it.
+    ctx.rotate(d.angle);
+    ctx.strokeStyle = d.color;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    if (d.sides <= 1) ctx.arc(0, 0, d.radius * scale, 0, Math.PI * 2);
+    else polygonPath(ctx, 0, 0, d.radius * scale, d.sides);
+    ctx.stroke();
   } else {
     ctx.rotate(d.angle);
     ctx.fillStyle = d.color;

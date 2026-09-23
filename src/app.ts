@@ -506,6 +506,7 @@ export class App {
       this.width,
       this.height,
       run.warnings,
+      run.perkTells(),
     );
     // No pointer while an overlay is up: the perk list is behind it.
     drawHud(ctx, run, this.hud, this.width, this.height, this.overlay ? null : this.input.pointerScreen);

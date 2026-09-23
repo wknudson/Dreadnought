@@ -41,6 +41,19 @@ export interface Perk {
   onTick?(world: World): void;
   /** The secondary button was pressed. Return true to consume it. */
   onSecondary?(world: World): boolean;
+  /**
+   * Live state for the renderer to show on the tank, such as shield charges left
+   * or how long each kill of a spree has to run. Reading it changes nothing.
+   */
+  gauge?(): readonly number[];
+}
+
+/** What the renderer is told about one perk, to draw it on the tank. */
+export interface PerkTell {
+  id: string;
+  stacks: number;
+  /** The perk's own `gauge`, or empty when it has none. */
+  gauge: readonly number[];
 }
 
 /**

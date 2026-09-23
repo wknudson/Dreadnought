@@ -50,3 +50,16 @@ export function statCap(def: TankDefinition, key: StatKey): number {
   if (def.hiddenStats?.includes(key)) return 0;
   return def.statCaps?.[key] ?? DEFAULT_STAT_CAP;
 }
+
+/**
+ * How far a tank's body reaches, guards included but barrels not, as a multiple
+ * of body radius. Anything drawn around the hull starts from here, so a Smasher's
+ * spinning guard does not hide it.
+ */
+export function hullExtent(def: TankDefinition): number {
+  let extent = 1;
+  for (const addon of [...def.preAddons, ...def.postAddons]) {
+    if (addon.kind === 'guard') for (const g of addon.guards) extent = Math.max(extent, g.sizeRatio);
+  }
+  return extent;
+}
