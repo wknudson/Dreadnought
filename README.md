@@ -85,7 +85,11 @@ taken stack above them, and hovering one explains what it does. Perks that act
 on the body also show on the tank itself, growing with each stack: Static Field
 as a ring at its reach, Thorns as green barbs, Shield as a hex shell per charge
 that breaks when it takes a hit, Killing Spree as a pip per kill still counting,
-and Last Stand as a red beat that quickens near death.
+and Last Stand as a red beat that quickens near death. The shot perks mark your
+bullets instead: a pointed nose for Piercing that blunts as it punches through,
+a ring per bounce left for Ricochet, a tail for Seeking Rounds, an orange core
+for Explosive Rounds, cracks for Split Shot, and a heavier outline for Heavy
+Rounds.
 
 A run is twenty-five waves with a boss every fifth. From wave 4, enemy tanks
 from the same upgrade tree join the polygons, spawning within two levels of you

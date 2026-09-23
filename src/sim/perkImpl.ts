@@ -105,6 +105,7 @@ export interface PerkDefinition {
 /** Colours shared with the tells in render/perkTells.ts, so an effect and its tell match. */
 export const SHIELD_COLOR = '#6FC3FF';
 export const STATIC_FIELD_COLOR = '#7FD1F5';
+export const EXPLOSION_COLOR = '#FFB86B';
 
 const isOwnedBy = (projectile: Entity, owner: Entity): boolean =>
   projectile.rootOwner() === owner;
@@ -198,7 +199,7 @@ export const PERKS: readonly PerkDefinition[] = [
           pos: vec(p.pos.x, p.pos.y),
           angle: 0,
           radius: blast * 0.5,
-          color: '#FFB86B',
+          color: EXPLOSION_COLOR,
           sides: 1,
           def: null,
         });
@@ -216,8 +217,9 @@ export const PERKS: readonly PerkDefinition[] = [
     create: () => ({
       id: 'heavy-rounds',
       stacks: 1,
-      modifyProjectile(stats) {
+      modifyProjectile(stats, mods) {
         stats.damage *= 1 + 0.25 * this.stacks;
+        mods.heavy = this.stacks;
       },
     }),
   },

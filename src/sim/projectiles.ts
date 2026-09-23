@@ -30,6 +30,11 @@ export interface ProjectileMods {
   split: number;
   /** Radius of an explosion on impact. */
   explodeRadius: number;
+  /**
+   * Heavy Rounds stacks. Only drawn: the damage itself is already in the shot's
+   * stats, which is the only place the physics looks.
+   */
+  heavy: number;
 }
 
 export const noMods = (): ProjectileMods => ({
@@ -38,6 +43,7 @@ export const noMods = (): ProjectileMods => ({
   homing: 0,
   split: 0,
   explodeRadius: 0,
+  heavy: 0,
 });
 
 /** What a drone is being told to do this tick. */
@@ -153,9 +159,18 @@ export abstract class Projectile extends Entity {
 }
 
 /** A plain bullet: launched fast, settles to a cruise speed, expires on a timer. */
+/** How many past positions a seeking shot keeps for its tail. */
+export const TRAIL_LENGTH = 6;
+
 export class Bullet extends Projectile {
   /** Terminal speed this bullet converges on. */
   protected readonly cruise: number;
+  /**
+   * Where a seeking shot has just been, newest first, one point per tick, for
+   * the tail that shows it bending. Empty for any shot that does not steer.
+   * Kept on the tick like `prevPos` so the tail is the same at any frame rate.
+   */
+  readonly trail: Vec2[] = [];
 
   constructor(
     pos: Vec2,
@@ -178,13 +193,24 @@ export class Bullet extends Projectile {
       return;
     }
 
-    if (this.mods.homing > 0) this.steerTowardTarget(world);
+    if (this.mods.homing > 0) {
+      this.steerTowardTarget(world);
+      this.recordTrail();
+    }
 
     maintainVelocity(this, this.angle, this.cruise);
     integrate(this);
 
     if (this.mods.bounces > 0) this.bounceOffWalls(world);
     else if (world.outsideArena(this.pos, this.radius)) this.expire(world);
+  }
+
+  /** Pushes the current position onto the tail, reusing the oldest point once full. */
+  private recordTrail(): void {
+    const point = this.trail.length < TRAIL_LENGTH ? vec() : this.trail.pop()!;
+    point.x = this.pos.x;
+    point.y = this.pos.y;
+    this.trail.unshift(point);
   }
 
   private steerTowardTarget(world: World): void {

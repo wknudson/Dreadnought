@@ -13,11 +13,12 @@ import type { World, DeathEffect } from '../sim/world.ts';
 import type { WarningRing } from '../sim/waves.ts';
 import type { PerkTell } from '../sim/perks.ts';
 import { drawPerkTellsOver, drawPerkTellsUnder } from './perkTells.ts';
+import { drawMarkedBullet, hasMarks } from './bulletLooks.ts';
 import type { Entity } from '../sim/entity.ts';
 import { DEATH_TICKS, FLASH_TICKS } from '../sim/entity.ts';
 import { Tank } from '../sim/tank.ts';
 import { Shape } from '../sim/shape.ts';
-import { Projectile } from '../sim/projectiles.ts';
+import { Bullet, Projectile } from '../sim/projectiles.ts';
 import { drawTank, polygonPath } from './drawTank.ts';
 import { COLORS, mix, outline } from '../data/colors.ts';
 import { lerp, vec, type Vec2 } from '../core/math.ts';
@@ -86,9 +87,11 @@ export function drawWorld(
   }
 
   for (const e of orbs) drawOrb(ctx, e, alpha);
-  for (const e of traps) drawProjectile(ctx, e as Projectile, alpha);
+  // World units per screen pixel, the floor for any line thinner than a pixel.
+  const px = 1 / camera.zoom;
+  for (const e of traps) drawProjectile(ctx, e as Projectile, alpha, px);
   for (const e of shapes) drawShape(ctx, e as Shape, alpha);
-  for (const e of projectiles) drawProjectile(ctx, e as Projectile, alpha);
+  for (const e of projectiles) drawProjectile(ctx, e as Projectile, alpha, px);
   for (const t of enemies) drawTankEntity(ctx, t, alpha);
   const time = world.tick - 1 + alpha;
   for (const t of players) {
@@ -277,7 +280,7 @@ function starPath(ctx: CanvasRenderingContext2D, radius: number, points: number)
   ctx.closePath();
 }
 
-function drawProjectile(ctx: CanvasRenderingContext2D, p: Projectile, alpha: number): void {
+function drawProjectile(ctx: CanvasRenderingContext2D, p: Projectile, alpha: number, px: number): void {
   const pos = lerpPos(p, alpha);
   const angle = lerpAngle(p.prevAngle, p.angle, alpha);
   const fill = p.deathColor;
@@ -297,9 +300,16 @@ function drawProjectile(ctx: CanvasRenderingContext2D, p: Projectile, alpha: num
     return;
   }
 
+  const body = p.flashTicks > 0 ? mix(fill, '#FFFFFF', 0.45) : fill;
+  // The player's perked bullets carry marks; everything else keeps the plain path.
+  if (p.projectileKind === 'bullet' && p instanceof Bullet && hasMarks(p)) {
+    drawMarkedBullet(ctx, p, pos, angle, body, px);
+    return;
+  }
+
   ctx.save();
   ctx.translate(pos.x, pos.y);
-  ctx.fillStyle = p.flashTicks > 0 ? mix(fill, '#FFFFFF', 0.45) : fill;
+  ctx.fillStyle = body;
   ctx.strokeStyle = outline(fill);
   ctx.lineWidth = Math.max(1, p.radius * 0.2);
   ctx.lineJoin = 'round';
