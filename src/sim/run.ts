@@ -35,6 +35,9 @@ export type PendingChoice = 'class' | 'card';
  * fractions of a unit forever, and anything that asks whether the arena has
  * finished moving never gets a yes.
  */
+/** How many recent Fast Learner kills the HUD may still be drawing sparks from. */
+const XP_SPARKS = 16;
+
 const easeArenaAxis = (current: number, target: number, rate: number): number =>
   Math.abs(current - target) < 0.5 ? target : lerp(current, target, rate);
 
@@ -108,6 +111,11 @@ export class Run implements PerkHost {
    * A win credits all of them in the codex, not only the last.
    */
   readonly classPath: string[] = [ROOT_TANK_ID];
+  /**
+   * Where the last few Fast Learner kills happened, and when, for the sparks
+   * the HUD flies from them to the experience bar. Empty without the perk.
+   */
+  readonly xpSparks: { pos: Vec2; tick: number }[] = [];
   /** Ticks since the player died, so the explosion can finish. */
   ticksSinceDeath = 0;
 
@@ -407,6 +415,13 @@ export class Run implements PerkHost {
     }
   }
 
+  /** Records a Fast Learner kill for the HUD's sparks, keeping only the latest. */
+  private noteXpSpark(victim: Shape | Tank): void {
+    if (!this.perks.has('scholar')) return;
+    if (this.xpSparks.length >= XP_SPARKS) this.xpSparks.shift();
+    this.xpSparks.push({ pos: vec(victim.pos.x, victim.pos.y), tick: this.world.tick });
+  }
+
   private onKill(victim: unknown, killer: unknown): void {
     const byPlayer = killer === this.player;
 
@@ -415,6 +430,7 @@ export class Run implements PerkHost {
       this.waves.forget(victim);
       if (byPlayer) {
         this.addXp(victim.xp);
+        this.noteXpSpark(victim);
         this.score += victim.xp;
         this.tryRaise(victim);
         this.perks.enemyKilled(victim, this.world);
@@ -432,6 +448,7 @@ export class Run implements PerkHost {
       if (byPlayer) {
         const reward = victim.bossXp || Math.round(victim.maxHealth * 1.5);
         this.addXp(reward);
+        this.noteXpSpark(victim);
         this.score += reward;
         this.perks.enemyKilled(victim, this.world);
       }

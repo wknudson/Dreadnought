@@ -89,7 +89,13 @@ and Last Stand as a red beat that quickens near death. The shot perks mark your
 bullets instead: a pointed nose for Piercing that blunts as it punches through,
 a ring per bounce left for Ricochet, a tail for Seeking Rounds, an orange core
 for Explosive Rounds, cracks for Split Shot, and a heavier outline for Heavy
-Rounds.
+Rounds. Bulwark bolts armour plates round the hull, Glass Cannon catches the
+light like glass, Afterburner shows a flame while a dash is ready and leaves
+afterimages when it fires, and Magnet draws specks in from its reach. Healing
+from Lifesteal and Field Repair flies into the tank as green motes, Harvest
+ripples where an orb drops, and Chain Reaction's blasts are yellow rings.
+Fast Learner puts a sheen on the experience bar with sparks flying into it, and
+Second Thoughts shows how many rerolls you hold beside the level bar.
 
 A run is twenty-five waves with a boss every fifth. From wave 4, enemy tanks
 from the same upgrade tree join the polygons, spawning within two levels of you

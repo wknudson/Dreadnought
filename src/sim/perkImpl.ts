@@ -106,6 +106,15 @@ export interface PerkDefinition {
 export const SHIELD_COLOR = '#6FC3FF';
 export const STATIC_FIELD_COLOR = '#7FD1F5';
 export const EXPLOSION_COLOR = '#FFB86B';
+export const CHAIN_COLOR = '#FFE36B';
+export const HEAL_COLOR = COLORS.healthFill;
+
+/** Least ticks between Lifesteal motes. */
+const LIFESTEAL_MOTE_TICKS = 3;
+/** Motes in a Field Repair burst. */
+const FIELD_REPAIR_MOTES = 10;
+/** Ticks of afterimage a dash leaves. */
+const DASH_GHOSTS = 5;
 
 const isOwnedBy = (projectile: Entity, owner: Entity): boolean =>
   projectile.rootOwner() === owner;
@@ -244,9 +253,9 @@ export const PERKS: readonly PerkDefinition[] = [
     create: (host) => ({
       id: 'magnet',
       stacks: 1,
-      onTick: (world) => {
+      onTick(world) {
         for (const e of world.near(host.player.pos, 1400)) {
-          if (e instanceof Pickup) e.attractRadius = Math.max(e.attractRadius, 480);
+          if (e instanceof Pickup) e.attractRadius = Math.max(e.attractRadius, magnetRadius(this.stacks));
         }
       },
     }),
@@ -266,6 +275,16 @@ export const PERKS: readonly PerkDefinition[] = [
         if (world.rng.next() > chance) return;
         const heal = victim instanceof Tank ? 30 : 12;
         world.spawn(new Pickup(victim.pos, heal, host.player));
+        // A small ripple where it drops, so an orb is noticed before it arrives.
+        world.addDeath({
+          pos: vec(victim.pos.x, victim.pos.y),
+          angle: 0,
+          radius: 18,
+          color: HEAL_COLOR,
+          sides: 1,
+          def: null,
+          ring: true,
+        });
       },
     }),
   },
@@ -344,16 +363,25 @@ export const PERKS: readonly PerkDefinition[] = [
     rarity: 'rare',
     weight: 5,
     maxStacks: 3,
-    create: (host) => ({
-      id: 'lifesteal',
-      stacks: 1,
-      onProjectileHit(projectile, _victim, _world) {
-        if (!isOwnedBy(projectile, host.player)) return;
-        const p = projectile as Projectile;
-        const heal = p.contactDamage * 0.08 * this.stacks;
-        host.player.health = Math.min(host.player.maxHealth, host.player.health + heal);
-      },
-    }),
+    create: (host) => {
+      // A fast gun lands several hits a tick; one mote every few is plenty to
+      // show where the health is coming from.
+      let lastMote = -Infinity;
+      return {
+        id: 'lifesteal',
+        stacks: 1,
+        onProjectileHit(projectile, _victim, world) {
+          if (!isOwnedBy(projectile, host.player)) return;
+          const p = projectile as Projectile;
+          const heal = p.contactDamage * 0.08 * this.stacks;
+          host.player.health = Math.min(host.player.maxHealth, host.player.health + heal);
+          if (world.tick - lastMote >= LIFESTEAL_MOTE_TICKS) {
+            lastMote = world.tick;
+            world.addMote(p.pos, host.player, HEAL_COLOR);
+          }
+        },
+      };
+    },
   },
   {
     id: 'field-repair',
@@ -365,9 +393,16 @@ export const PERKS: readonly PerkDefinition[] = [
     create: (host) => ({
       id: 'field-repair',
       stacks: 1,
-      onWaveClear() {
-        const heal = host.player.maxHealth * (0.2 + 0.15 * this.stacks);
-        host.player.health = Math.min(host.player.maxHealth, host.player.health + heal);
+      onWaveClear(world) {
+        const tank = host.player;
+        const heal = tank.maxHealth * (0.2 + 0.15 * this.stacks);
+        tank.health = Math.min(tank.maxHealth, tank.health + heal);
+        // A ring of motes closing in, so the patch-up is seen as it happens.
+        for (let i = 0; i < FIELD_REPAIR_MOTES; i++) {
+          const a = (Math.PI * 2 * i) / FIELD_REPAIR_MOTES;
+          const at = vec(tank.pos.x + Math.cos(a) * tank.radius * 3, tank.pos.y + Math.sin(a) * tank.radius * 3);
+          world.addMote(at, tank, HEAL_COLOR, i);
+        }
       },
     }),
   },
@@ -380,15 +415,35 @@ export const PERKS: readonly PerkDefinition[] = [
     maxStacks: 2,
     create: (host) => {
       let cooldown = 0;
+      let full = 1;
+      let ghosts = 0;
       return {
         id: 'dash',
         stacks: 1,
-        onTick() {
+        gauge: () => [1 - cooldown / full],
+        onTick(world) {
           if (cooldown > 0) cooldown--;
+          // Afterimages for the first few ticks of a dash, so the burst reads as
+          // a burst rather than a teleport.
+          if (ghosts > 0) {
+            ghosts--;
+            const tank = host.player;
+            world.addDeath({
+              pos: vec(tank.pos.x, tank.pos.y),
+              angle: tank.angle,
+              radius: tank.radius,
+              color: tank.color,
+              sides: 1,
+              def: tank.def,
+              ghost: true,
+            });
+          }
         },
         onSecondary() {
           if (cooldown > 0) return false;
           cooldown = Math.max(20, 60 - 15 * this.stacks);
+          full = cooldown;
+          ghosts = DASH_GHOSTS;
           const tank = host.player;
           const heading = Math.atan2(tank.lastIntent.moveY, tank.lastIntent.moveX);
           const moving = Math.hypot(tank.lastIntent.moveX, tank.lastIntent.moveY) > 0.01;
@@ -486,9 +541,10 @@ export const PERKS: readonly PerkDefinition[] = [
             pos: vec(victim.pos.x, victim.pos.y),
             angle: 0,
             radius: blast * 0.45,
-            color: '#FFB86B',
+            color: CHAIN_COLOR,
             sides: 1,
             def: null,
+            ring: true,
           });
         } finally {
           chainDepth--;
@@ -616,6 +672,9 @@ export const PERKS: readonly PerkDefinition[] = [
     },
   },
 ];
+
+/** How far Magnet pulls orbs from. Each stack reaches further. */
+export const magnetRadius = (stacks: number): number => 320 + 160 * stacks;
 
 /** A shield shell's size, as a multiple of the hull, for the i-th charge out. */
 export const shieldShellRadius = (i: number): number => 1.35 + 0.38 * i;

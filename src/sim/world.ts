@@ -24,10 +24,40 @@ export interface DeathEffect {
   def: TankDefinition | null;
   /** Draw only a thin outline, for a ripple rather than a burst. */
   ring?: boolean;
+  /** Fade in place without growing, for an afterimage rather than a death. */
+  ghost?: boolean;
   /** Counts up to DEATH_TICKS. */
   age: number;
   prevAge: number;
 }
+
+/**
+ * A spark that flies into something, such as health coming back to the player.
+ *
+ * Purely visual, and deliberately kept off the simulation's random stream: its
+ * starting direction comes from a hash of the tick and an index, so adding one
+ * never changes what a seed plays out.
+ */
+export interface Mote {
+  pos: Vec2;
+  prevPos: Vec2;
+  vel: Vec2;
+  target: Entity;
+  color: string;
+  age: number;
+}
+
+/** Most motes alive at once. Past this, new ones are simply not made. */
+export const MAX_MOTES = 48;
+/** How long a mote may fly before it is dropped, arrived or not. */
+const MOTE_TICKS = 30;
+
+/** A repeatable angle from two integers, for spreading effects without the RNG. */
+const hashAngle = (a: number, b: number): number => {
+  let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x632be5ab, 0xc2b2ae35);
+  h ^= h >>> 15;
+  return ((h >>> 0) / 0x100000000) * Math.PI * 2;
+};
 
 export interface WorldEvents {
   entityKilled: { victim: Entity; killer: Entity | null };
@@ -174,6 +204,7 @@ export class World {
   readonly events = new EventBus();
   readonly hash = new SpatialHash();
   readonly deaths: DeathEffect[] = [];
+  readonly motes: Mote[] = [];
 
   arena: Arena = squareArena(DEFAULT_ARENA_HALF_SIZE);
 
@@ -281,6 +312,45 @@ export class World {
     this.entities.length = write;
   }
 
+  /**
+   * Sends a mote from a point into a target. `index` spreads several made on
+   * the same tick, so a burst fans out rather than stacking on one line.
+   */
+  addMote(from: Vec2, target: Entity, color: string, index = 0): void {
+    if (this.motes.length >= MAX_MOTES) return;
+    const a = hashAngle(this.tick, index);
+    this.motes.push({
+      pos: vec(from.x, from.y),
+      prevPos: vec(from.x, from.y),
+      vel: vec(Math.cos(a) * 9, Math.sin(a) * 9),
+      target,
+      color,
+      age: 0,
+    });
+  }
+
+  private advanceMotes(): void {
+    let write = 0;
+    for (let read = 0; read < this.motes.length; read++) {
+      const m = this.motes[read]!;
+      m.prevPos.x = m.pos.x;
+      m.prevPos.y = m.pos.y;
+      m.age++;
+      const dx = m.target.pos.x - m.pos.x;
+      const dy = m.target.pos.y - m.pos.y;
+      const distance = Math.hypot(dx, dy) || 1;
+      if (!m.target.alive || m.age > MOTE_TICKS || distance < m.target.radius * 0.6) continue;
+      // Steer ever harder toward the target, so it curls in rather than overshooting.
+      const pull = 2.5 + m.age * 0.35;
+      m.vel.x = m.vel.x * 0.82 + (dx / distance) * pull;
+      m.vel.y = m.vel.y * 0.82 + (dy / distance) * pull;
+      m.pos.x += m.vel.x;
+      m.pos.y += m.vel.y;
+      this.motes[write++] = m;
+    }
+    this.motes.length = write;
+  }
+
   private advanceDeaths(): void {
     let write = 0;
     for (let read = 0; read < this.deaths.length; read++) {
@@ -318,6 +388,7 @@ export class World {
     resolveContacts(this);
 
     this.advanceDeaths();
+    this.advanceMotes();
     this.sweepDead();
   }
 }

@@ -509,7 +509,16 @@ export class App {
       run.perkTells(),
     );
     // No pointer while an overlay is up: the perk list is behind it.
-    drawHud(ctx, run, this.hud, this.width, this.height, this.overlay ? null : this.input.pointerScreen);
+    drawHud(
+      ctx,
+      run,
+      this.hud,
+      this.width,
+      this.height,
+      this.overlay ? null : this.input.pointerScreen,
+      (world) => this.camera.worldToScreen(world),
+      run.world.tick - 1 + (this.simRunning ? alpha : 1),
+    );
     if (this.input.touchAvailable && !this.input.usingMouse) {
       drawTouchSticks(ctx, this.input.touch);
     }

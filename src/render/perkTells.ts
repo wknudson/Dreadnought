@@ -3,8 +3,10 @@
  * fight rather than only read off the list in the corner.
  *
  * Only the perks whose effect lives on the body are here: Static Field, Thorns,
- * Shield, Killing Spree and Last Stand. Each one grows with its stacks, so the
- * tank shows how much of a perk it has as well as which. Everything is flat
+ * Shield, Killing Spree, Last Stand, Bulwark, Glass Cannon, Afterburner and
+ * Magnet. The shot perks mark the bullets instead (bulletLooks.ts), and the two
+ * with nothing physical to show live on the HUD. Each one grows with its stacks,
+ * so the tank shows how much of a perk it has as well as which. Everything is flat
  * shapes with dark outlines, in diep.io's own vocabulary, and everything is
  * timed off the simulation's tick so it pauses when the game does.
  *
@@ -17,6 +19,7 @@ import type { Tank } from '../sim/tank.ts';
 import {
   SHIELD_COLOR,
   STATIC_FIELD_COLOR,
+  magnetRadius,
   shieldShellRadius,
   staticFieldRadius,
 } from '../sim/perkImpl.ts';
@@ -28,6 +31,9 @@ import type { Vec2 } from '../core/math.ts';
 const THORN_COLOR = '#4F8A3C';
 const SPREE_COLOR = '#FFB347';
 const LAST_STAND_COLOR = '#FF4D5E';
+const BULWARK_COLOR = '#6B6F76';
+const FLAME_COLOR = '#FF9A3C';
+const MAGNET_COLOR = '#7C8DA0';
 
 /** Tells that sit behind the hull: the field on the ground, and the barbs. */
 export function drawPerkTellsUnder(
@@ -44,7 +50,10 @@ export function drawPerkTellsUnder(
   ctx.globalAlpha = tank.opacity;
   for (const tell of tells) {
     if (tell.id === 'static-field') drawStaticField(ctx, tell.stacks, time);
+    else if (tell.id === 'magnet') drawMagnet(ctx, tank, tell.stacks, time);
+    else if (tell.id === 'dash') drawFlame(ctx, tank, tell.gauge[0] ?? 1, time);
     else if (tell.id === 'thorns') drawThorns(ctx, tank, tell.stacks, time);
+    else if (tell.id === 'bulwark') drawBulwark(ctx, tank, tell.stacks);
   }
   ctx.restore();
 }
@@ -65,7 +74,8 @@ export function drawPerkTellsOver(
   const charges = tells.find((t) => t.id === 'shield')?.gauge[0] ?? 0;
   const clear = charges > 0 ? shieldShellRadius(charges - 1) + 0.3 : 1.6;
   for (const tell of tells) {
-    if (tell.id === 'shield') drawShield(ctx, tank, tell.gauge[0] ?? 0, time);
+    if (tell.id === 'glass-cannon') drawGlass(ctx, tank, tell.stacks, time);
+    else if (tell.id === 'shield') drawShield(ctx, tank, tell.gauge[0] ?? 0, time);
     else if (tell.id === 'spree') drawSpree(ctx, tank, tell.stacks, tell.gauge, clear);
     else if (tell.id === 'last-stand') drawLastStand(ctx, tank, tell.stacks, tell.gauge[0] ?? 0, time);
   }
@@ -231,5 +241,111 @@ function drawLastStand(
   ctx.beginPath();
   ctx.arc(0, 0, r * (1.05 + 0.35 * phase), 0, Math.PI * 2);
   ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * Armour plates hugging the hull: a ring of dark segments with gaps between,
+ * more of them and thicker with each stack, so the tank looks bolted up.
+ */
+function drawBulwark(ctx: CanvasRenderingContext2D, tank: Tank, stacks: number): void {
+  const r = tank.radius * hullExtent(tank.def);
+  const plates = 6 + 2 * stacks;
+  const width = tank.radius * (0.14 + 0.06 * stacks);
+  const ring = r + width * 0.35;
+  const gap = 0.16;
+  const turn = tank.angle;
+  ctx.save();
+  ctx.lineCap = 'butt';
+  ctx.beginPath();
+  for (let i = 0; i < plates; i++) {
+    const a = turn + (Math.PI * 2 * i) / plates;
+    const span = (Math.PI * 2) / plates;
+    ctx.moveTo(Math.cos(a + gap) * ring, Math.sin(a + gap) * ring);
+    ctx.arc(0, 0, ring, a + gap, a + span - gap);
+  }
+  ctx.strokeStyle = outline(BULWARK_COLOR);
+  ctx.lineWidth = width + Math.max(2, tank.radius * 0.06);
+  ctx.stroke();
+  ctx.strokeStyle = BULWARK_COLOR;
+  ctx.lineWidth = width;
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * A pale crescent of light across the body, sweeping slowly round, the way light
+ * sits on glass. Clipped to the body, so it never spills past the outline.
+ */
+function drawGlass(ctx: CanvasRenderingContext2D, tank: Tank, stacks: number, time: number): void {
+  const r = tank.radius;
+  const a = time * 0.03;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.9, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.globalAlpha *= 0.3 + 0.15 * stacks;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.beginPath();
+  // Two offset circles make the crescent: the lit one minus a shadow one.
+  ctx.arc(Math.cos(a) * r * 0.35, Math.sin(a) * r * 0.35, r * 0.7, 0, Math.PI * 2);
+  ctx.arc(Math.cos(a) * r * 0.62, Math.sin(a) * r * 0.62, r * 0.72, 0, Math.PI * 2, true);
+  ctx.fill('evenodd');
+  ctx.restore();
+}
+
+/**
+ * A small flame behind the tank while the dash is ready, shrinking away as it
+ * recharges, so you can tell at a glance whether you have one to spend.
+ */
+function drawFlame(ctx: CanvasRenderingContext2D, tank: Tank, ready: number, time: number): void {
+  if (ready <= 0.05) return;
+  const r = tank.radius * hullExtent(tank.def);
+  const back = tank.angle + Math.PI;
+  const flicker = 0.85 + 0.15 * Math.sin(time * 1.7) + 0.08 * Math.sin(time * 4.1);
+  const length = tank.radius * 0.75 * ready * flicker;
+  const half = tank.radius * 0.28 * ready;
+  ctx.save();
+  ctx.rotate(back);
+  ctx.beginPath();
+  ctx.moveTo(r * 0.85, -half);
+  ctx.lineTo(r + length, 0);
+  ctx.lineTo(r * 0.85, half);
+  ctx.closePath();
+  ctx.fillStyle = FLAME_COLOR;
+  ctx.strokeStyle = outline(FLAME_COLOR);
+  ctx.lineWidth = Math.max(1.5, tank.radius * 0.06);
+  ctx.lineJoin = 'round';
+  ctx.globalAlpha *= 0.85;
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * Faint specks drifting in from the pull radius, fading as they near the tank.
+ * Placed by the tick alone, so they need no state.
+ */
+function drawMagnet(ctx: CanvasRenderingContext2D, tank: Tank, stacks: number, time: number): void {
+  const reach = magnetRadius(stacks);
+  const inner = tank.radius * hullExtent(tank.def) * 1.4;
+  const specks = 8;
+  const period = 60;
+  const base = ctx.globalAlpha;
+  ctx.save();
+  ctx.fillStyle = MAGNET_COLOR;
+  ctx.strokeStyle = outline(MAGNET_COLOR);
+  ctx.lineWidth = Math.max(1.5, tank.radius * 0.04);
+  for (let i = 0; i < specks; i++) {
+    // Each speck is a quarter of the way further through its fall than the last.
+    const t = ((time + (period * i) / specks) % period) / period;
+    const d = reach + (inner - reach) * t * t;
+    const a = (Math.PI * 2 * i) / specks + i * 0.7;
+    ctx.globalAlpha = base * 0.85 * Math.sin(Math.PI * t);
+    ctx.beginPath();
+    ctx.arc(Math.cos(a) * d, Math.sin(a) * d, Math.max(5, tank.radius * 0.15), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
   ctx.restore();
 }

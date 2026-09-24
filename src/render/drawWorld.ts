@@ -9,7 +9,7 @@
  */
 
 import type { Camera } from './camera.ts';
-import type { World, DeathEffect } from '../sim/world.ts';
+import type { World, DeathEffect, Mote } from '../sim/world.ts';
 import type { WarningRing } from '../sim/waves.ts';
 import type { PerkTell } from '../sim/perks.ts';
 import { drawPerkTellsOver, drawPerkTellsUnder } from './perkTells.ts';
@@ -102,6 +102,7 @@ export function drawWorld(
   }
 
   for (const d of world.deaths) drawDeath(ctx, d, alpha);
+  drawMotes(ctx, world.motes, alpha, px);
 
   // Health bars and names render in their own passes so nothing overlaps them.
   for (const e of [...shapes, ...enemies, ...players]) drawHealthBar(ctx, e, alpha);
@@ -337,13 +338,41 @@ function drawProjectile(ctx: CanvasRenderingContext2D, p: Projectile, alpha: num
   ctx.restore();
 }
 
+/**
+ * Sparks flying into their target, such as health coming back to the player.
+ *
+ * One small path each. Folding them into a single path looks cheaper and is
+ * not: filling one path of many circles measured several times slower than
+ * filling the circles one by one.
+ */
+function drawMotes(ctx: CanvasRenderingContext2D, motes: readonly Mote[], alpha: number, px: number): void {
+  if (!motes.length) return;
+  ctx.save();
+  ctx.lineWidth = Math.max(px, 2.5);
+  const r = Math.max(px * 2, 7);
+  let color = '';
+  for (const m of motes) {
+    if (m.color !== color) {
+      color = m.color;
+      ctx.fillStyle = color;
+      ctx.strokeStyle = outline(color);
+    }
+    ctx.beginPath();
+    ctx.arc(lerp(m.prevPos.x, m.pos.x, alpha), lerp(m.prevPos.y, m.pos.y, alpha), r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 /** The puff-and-fade a dying entity leaves behind. */
 function drawDeath(ctx: CanvasRenderingContext2D, d: DeathEffect, alpha: number): void {
   const age = lerp(d.prevAge, d.age, alpha);
   const t = Math.min(1, age / DEATH_TICKS);
-  const scale = Math.pow(1.1, age);
+  // An afterimage holds its size and starts faint; a death swells as it goes.
+  const scale = d.ghost ? 1 : Math.pow(1.1, age);
   ctx.save();
-  ctx.globalAlpha = Math.max(0, 1 - t);
+  ctx.globalAlpha = Math.max(0, 1 - t) * (d.ghost ? 0.4 : 1);
   ctx.translate(d.pos.x, d.pos.y);
   if (d.def) {
     drawTank(ctx, d.def, { color: d.color, angle: d.angle, radius: d.radius * scale });

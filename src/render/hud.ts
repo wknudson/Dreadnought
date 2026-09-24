@@ -3,7 +3,9 @@
  *
  * The level and score bars, the wave status, the perk list and its tooltip, the
  * minimap and the wave banner, along with the touch joysticks and the debug
- * readout. The game's figures are read from the run each frame rather than kept
+ * readout. Two perks with nothing to show in the world show here instead: Fast
+ * Learner as a sheen on the experience bar with sparks flying into it, and
+ * Second Thoughts as a reroll count beside it. The game's figures are read from the run each frame rather than kept
  * here; the only state passed in is the banner's text and timing. The stat column
  * is drawn by statColumn.ts.
  */
@@ -91,6 +93,10 @@ export function drawHud(
   height: number,
   /** The mouse, in CSS pixels, for the perk list to test against. */
   pointer: Vec2 | null = null,
+  /** Projects a world position to the screen, for sparks that start in the world. */
+  toScreen: ((world: Vec2) => Vec2) | null = null,
+  /** Simulation ticks, fractional between them, for anything that moves. */
+  time: number = run.world.tick,
 ): void {
   const barWidth = Math.min(460, width * 0.52);
   const x = (width - barWidth) / 2;
@@ -105,7 +111,18 @@ export function drawHud(
       ? `Lvl ${run.level} ${run.player.def.name}`
       : `Lvl ${run.level} ${run.player.def.name}`;
 
-  bar(ctx, x, bottom - scoreHeight - levelHeight * 0.9, barWidth, levelHeight, progress, COLORS.xpBar, levelLabel);
+  const levelY = bottom - scoreHeight - levelHeight * 0.9;
+  bar(ctx, x, levelY, barWidth, levelHeight, progress, COLORS.xpBar, levelLabel);
+  if (run.perks.has('scholar')) {
+    drawXpSheen(ctx, x, levelY, barWidth, levelHeight, progress, time);
+    if (toScreen) {
+      const into = { x: x + levelHeight / 2 + (barWidth - levelHeight) * Math.min(1, progress), y: levelY };
+      drawXpSparks(ctx, run, toScreen, into, time, scale);
+    }
+  }
+  if (run.rerolls > 0) {
+    outlinedText(ctx, `↻ ${run.rerolls}`, x + barWidth + 10 * scale, levelY, 16 * scale, 'left');
+  }
   bar(
     ctx,
     x + barWidth * 0.08,
@@ -123,6 +140,76 @@ export function drawHud(
   drawPerks(ctx, run, width, height, perkBase, scale, pointer);
   drawMinimap(ctx, run, width, height, scale);
   drawBanner(ctx, state, width, height, scale);
+}
+
+/**
+ * A band of light sliding along the filled part of the experience bar, once
+ * every two seconds, while Fast Learner is held.
+ */
+function drawXpSheen(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  progress: number,
+  time: number,
+): void {
+  const filled = (width - height) * Math.max(0, Math.min(1, progress));
+  if (filled < 4) return;
+  const start = x + height / 2;
+  const t = (time % 50) / 50;
+  const band = height * 1.2;
+  const cx = start - band + (filled + band * 2) * t;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(start - height * 0.31, y - height * 0.31, filled + height * 0.62, height * 0.62);
+  ctx.clip();
+  const g = ctx.createLinearGradient(cx - band, 0, cx + band, 0);
+  g.addColorStop(0, 'rgba(255,255,255,0)');
+  g.addColorStop(0.5, 'rgba(255,255,255,0.55)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(cx - band, y - height / 2, band * 2, height);
+  ctx.restore();
+}
+
+/** How many ticks a Fast Learner spark takes to reach the bar. */
+const SPARK_TICKS = 14;
+
+/**
+ * A gold spark from each recent Fast Learner kill to the end of the experience
+ * bar, easing in so it lands rather than arriving at a constant crawl.
+ */
+function drawXpSparks(
+  ctx: CanvasRenderingContext2D,
+  run: Run,
+  toScreen: (world: Vec2) => Vec2,
+  into: Vec2,
+  time: number,
+  scale: number,
+): void {
+  ctx.save();
+  ctx.fillStyle = COLORS.xpBar;
+  ctx.strokeStyle = '#8A7A1F';
+  ctx.lineWidth = 2 * scale;
+  ctx.beginPath();
+  for (const spark of run.xpSparks) {
+    const t = (time - spark.tick) / SPARK_TICKS;
+    if (t < 0 || t >= 1) continue;
+    const from = toScreen(spark.pos);
+    const e = t * t * (3 - 2 * t);
+    // A little lift in the middle, so it arcs up to the bar instead of sliding.
+    const lift = Math.sin(Math.PI * t) * 60 * scale;
+    const sx = from.x + (into.x - from.x) * e;
+    const sy = from.y + (into.y - from.y) * e - lift;
+    const r = (5 - 2 * t) * scale;
+    ctx.moveTo(sx + r, sy);
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+  }
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
 }
 
 /**
