@@ -685,3 +685,17 @@ test('a bargain perk charges what it promises', () => {
   assert.ok(plainShot && glassShot);
   assert.equal(glassShot.contactDamage, plainShot.contactDamage * 2, 'and damage is what it buys');
 });
+
+test('a window with no size cannot break the arena', () => {
+  // A hidden pane reports 0 x 0, and measuring it divides zero by zero. That NaN
+  // once became the arena's size and then every position in the world.
+  const run = makeRun();
+  const before = { ...run.world.arena.half };
+  for (const bad of [Number.NaN, 0, -5, Number.POSITIVE_INFINITY]) run.setViewReference(bad);
+  run.tick();
+  assert.deepEqual(run.world.arena.half, before, 'the arena keeps its size');
+  assert.ok(Number.isFinite(run.player.pos.x) && Number.isFinite(run.player.pos.y));
+
+  run.setViewReference(1600);
+  assert.ok(Number.isFinite(run.world.arena.targetHalf.x), 'and a real size still gets through');
+});

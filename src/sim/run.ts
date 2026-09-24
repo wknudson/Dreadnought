@@ -506,6 +506,9 @@ export class Run implements PerkHost {
    * and a monitor, rather than fixed in units and therefore invisible on one.
    */
   setViewReference(halfWidthInUnits: number): void {
+    // A reading that is not a real size is ignored rather than trusted: one NaN
+    // here becomes the arena's size, and from there every position in the world.
+    if (!Number.isFinite(halfWidthInUnits) || halfWidthInUnits <= 0) return;
     this.waves.viewReference = halfWidthInUnits;
     // Through the director, not around it: a window resized in the middle of the
     // last fight must not hand the arena back its square.

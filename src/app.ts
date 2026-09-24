@@ -238,6 +238,9 @@ export class App {
   private syncArenaToView(): void {
     const run = this.run;
     if (!run) return;
+    // A window with no size (a hidden pane, an iframe mid-layout) says nothing
+    // about the screen, and measuring it would divide zero by zero.
+    if (!(this.width > 0 && this.height > 0)) return;
     const zoom = run.player.fieldOfView() * Math.max(this.height / 1080, this.width / 1920);
     const halfWidth = this.width / 2 / zoom;
     const halfHeight = this.height / 2 / zoom;
