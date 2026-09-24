@@ -100,7 +100,10 @@ Second Thoughts shows how many rerolls you hold beside the level bar.
 A run is twenty-five waves with a boss every fifth. From wave 4, enemy tanks
 from the same upgrade tree join the polygons, spawning within two levels of you
 rather than at a level fixed by the wave. Levelling deals a choice of three
-cards, and at levels 15, 30 and 45 you pick a class from the real upgrade tree. Dying ends the run; only the best wave and score survive it.
+cards, stat points and uncommon perks, and at levels 15, 30 and 45 you pick a
+class from the real upgrade tree. Rare perks are never dealt by levelling: each
+boss you beat on waves 5, 10, 15 and 20 pays a hand of three rares to choose
+from instead. Dying ends the run; only the best wave and score survive it.
 
 Easy, Normal and Hard are picked on the title screen and each keeps its own
 best. They change how many enemies a wave buys, how tough they are and how

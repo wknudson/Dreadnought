@@ -75,7 +75,9 @@ export function buildClassUpgrade(options: ClassChoiceOptions): HTMLElement {
 
 export interface CardChoiceOptions {
   hand: readonly Card[];
-  level: number;
+  /** The heading: the level that paid for a level-up, or the wave for a boss reward. */
+  title: string;
+  subtitle: string;
   /** Rerolls the player has left to spend. */
   rerolls: number;
   onPick(card: Card): void;
@@ -83,7 +85,8 @@ export interface CardChoiceOptions {
 }
 
 /**
- * The pick-one-of-three offered at each level that pays out.
+ * The pick-one-of-three offered at each level that pays out, and after each
+ * boss, where every card is a rare perk.
  *
  * Stat cards carry the colour diep.io uses for that stat, which is the one piece
  * of the original interface worth keeping here: players who know the game read
@@ -113,8 +116,8 @@ export function buildCardChoice(options: CardChoiceOptions): HTMLElement {
     el(
       'div',
       { class: 'panel panel-wide' },
-      el('h2', {}, `Level ${options.level}`),
-      el('p', { class: 'panel-sub' }, 'Choose one'),
+      el('h2', {}, options.title),
+      el('p', { class: 'panel-sub' }, options.subtitle),
       el('div', { class: 'choices' }, ...cards),
       options.rerolls > 0
         ? el(

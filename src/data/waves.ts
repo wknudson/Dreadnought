@@ -29,7 +29,11 @@ export interface Difficulty {
   /** Seconds of quiet between waves. */
   breather: number;
   /**
-   * Chance a card slot offers a perk rather than a stat.
+   * Chance a level-up card slot offers a perk rather than a stat.
+   *
+   * Only uncommon perks come this way; rares are paid by bosses instead (see
+   * `HandKind` in cards.ts), so this sets how many stat points a run gets and
+   * how often it sees an uncommon, and nothing about its rares.
    *
    * The lever that pays for the perk pool existing, and the one that quietly
    * sets how much damage a player brings to a boss. A run deals 33 cards and

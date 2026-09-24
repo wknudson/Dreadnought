@@ -29,7 +29,7 @@ export function answerChoices(run: Run, rng: Rng): void {
     } else {
       const hand = run.dealHand();
       if (hand.length) run.takeCard(rng.pick(hand));
-      else run.consumeChoice('card');
+      else run.consumeChoice(next!);
     }
   }
 }

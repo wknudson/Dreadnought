@@ -67,7 +67,7 @@ function advance(run: Run, ticks: number, input = intent(), aim = 0): void {
       } else {
         const hand = run.dealHand();
         if (hand.length) run.takeCard(hand[0]!);
-        else run.consumeChoice('card');
+        else run.consumeChoice(next!);
       }
     }
   }
@@ -360,6 +360,7 @@ test('a capped stat is never offered again', () => {
 
   for (let attempt = 0; attempt < 12; attempt++) {
     for (const card of dealCards({
+      kind: 'level',
       def,
       points: run.player.points,
       perks: run.perks,

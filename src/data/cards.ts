@@ -22,8 +22,18 @@ export type Card =
   | { kind: 'perk'; perk: PerkDefinition }
   | { kind: 'heal'; amount: number };
 
-/** How many cards a level-up offers. */
+/** How many cards a hand offers, whether from a level or a boss. */
 export const HAND_SIZE = 3;
+
+/**
+ * What a hand is for.
+ *
+ * A level-up deals stats and uncommon perks. A cleared boss wave deals rare
+ * perks and nothing else. Rares used to come from level-ups too, and levelling
+ * is fastest at the start of a run, so a player could hold several before the
+ * first boss; tying them to bosses spaces them out across the run instead.
+ */
+export type HandKind = 'level' | 'rare';
 
 /** What each stat does, said plainly for someone who has not played diep.io. */
 const STAT_DESCRIPTIONS: Readonly<Record<StatKey, string>> = {
@@ -60,6 +70,7 @@ const defaultLabel = (stat: StatKey): string =>
   })[stat];
 
 export interface DealContext {
+  kind: HandKind;
   def: TankDefinition;
   points: StatBlock;
   perks: PerkSet;
@@ -84,13 +95,15 @@ function availablePerks(ctx: DealContext): PerkDefinition[] {
 /**
  * Deals a hand of cards.
  *
- * Each slot independently rolls for a perk or a stat, which keeps the common
- * case, a straightforward stat bump, common, while leaving room for a hand of
- * three perks to turn up occasionally and feel like a moment.
+ * A level-up hand rolls each slot independently for a perk or a stat, which
+ * keeps the common case, a straightforward stat bump, common, while leaving
+ * room for a hand of three perks to turn up occasionally and feel like a moment.
+ * Its perks are uncommon only.
  */
 export function dealCards(ctx: DealContext): Card[] {
+  if (ctx.kind === 'rare') return dealRareHand(ctx);
   const stats = availableStats(ctx.def, ctx.points);
-  const perks = availablePerks(ctx);
+  const perks = availablePerks(ctx).filter((p) => p.rarity !== 'rare');
 
   const hand: Card[] = [];
   const usedStats = new Set<StatKey>();
@@ -118,6 +131,34 @@ export function dealCards(ctx: DealContext): Card[] {
     }
   }
 
+  return hand;
+}
+
+/**
+ * Deals the reward for a cleared boss wave: rare perks only, with no repeats.
+ *
+ * Once rares run short, because the build cannot use them or they are all at
+ * their cap, the hand is filled with uncommons and then with the heal card, so
+ * a boss always pays something.
+ */
+function dealRareHand(ctx: DealContext): Card[] {
+  const perks = availablePerks(ctx);
+  const rares = perks.filter((p) => p.rarity === 'rare');
+  const others = perks.filter((p) => p.rarity !== 'rare');
+  const hand: Card[] = [];
+  const used = new Set<string>();
+  for (let slot = 0; slot < HAND_SIZE; slot++) {
+    const pool = rares.filter((p) => !used.has(p.id));
+    const fallback = others.filter((p) => !used.has(p.id));
+    const from = pool.length ? pool : fallback;
+    if (!from.length) {
+      hand.push({ kind: 'heal', amount: 0.3 });
+      continue;
+    }
+    const perk = ctx.rng.weighted(from, (p) => p.weight);
+    used.add(perk.id);
+    hand.push({ kind: 'perk', perk });
+  }
   return hand;
 }
 

@@ -107,22 +107,30 @@ export class App {
     });
 
     this.onChoice('class', (run) => this.showClassUpgrade(run));
-    this.onChoice('card', (run) => this.showCardChoice(run));
+    this.onChoice('card', (run) => this.showCardChoice(run, 'card'));
+    this.onChoice('rare', (run) => this.showCardChoice(run, 'rare'));
   }
 
-  /** Presents the pick-one-of-three earned by levelling. */
-  private showCardChoice(run: Run): void {
-    const hand = run.dealHand();
+  /**
+   * Presents a pick-one-of-three: the stats and uncommons earned by levelling,
+   * or the rare perks a cleared boss wave pays.
+   */
+  private showCardChoice(run: Run, kind: 'card' | 'rare'): void {
+    const hand = run.dealHand(kind === 'rare' ? 'rare' : 'level');
     if (!hand.length) {
-      run.consumeChoice('card');
+      run.consumeChoice(kind);
       return;
     }
+    const heading =
+      kind === 'rare'
+        ? { title: `Wave ${run.wave} cleared`, subtitle: 'Choose a rare perk' }
+        : { title: `Level ${run.level}`, subtitle: 'Choose one' };
     this.input.releaseAll();
     const render = (): void => {
       mount(
         buildCardChoice({
           hand: run.hand,
-          level: run.level,
+          ...heading,
           rerolls: run.rerolls,
           onPick: (card) => {
             run.takeCard(card);

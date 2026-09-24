@@ -17,16 +17,19 @@ import { Projectile, raiseNecroDrone } from './projectiles.ts';
 import { getTank, ROOT_TANK_ID, upgradeChoices } from '../data/tanks.ts';
 import { CARD_LEVELS, CLASS_LEVELS, levelForXp, MAX_LEVEL, xpForLevel } from '../data/leveling.ts';
 import type { DifficultyId } from '../core/storage.ts';
-import { DIFFICULTIES, arenaSizeForWave, type Difficulty } from '../data/waves.ts';
+import { BOSS_INTERVAL, DIFFICULTIES, FINAL_WAVE, arenaSizeForWave, type Difficulty } from '../data/waves.ts';
 import { WaveDirector, type WarningRing } from './waves.ts';
 import { PerkSet, type PerkTell } from './perks.ts';
 import { xpMultiplierFor, type PerkDefinition, type PerkHost } from './perkImpl.ts';
-import { dealCards, type Card } from '../data/cards.ts';
+import { dealCards, type Card, type HandKind } from '../data/cards.ts';
 import { aiContext } from './ai.ts';
 import { lerp, vec, type Vec2 } from '../core/math.ts';
 
-/** A decision waiting on the player, which holds the simulation while it stands. */
-export type PendingChoice = 'class' | 'card';
+/**
+ * A decision waiting on the player, which holds the simulation while it stands.
+ * `card` is a level-up hand, and `rare` is the rare-perk reward for a boss wave.
+ */
+export type PendingChoice = 'class' | 'card' | 'rare';
 
 /**
  * Eases one arena axis toward its target, snapping once the gap stops showing.
@@ -104,6 +107,10 @@ export class Run implements PerkHost {
   readonly pendingChoices: PendingChoice[] = [];
   /** The hand currently on offer, while a card choice is open. */
   hand: Card[] = [];
+  /** Level-up cards a boss reward has already been paid in place of. */
+  private cardsOwed = 0;
+  /** Which kind of choice the hand on offer answers, so taking it clears the right one. */
+  handKind: HandKind = 'level';
 
   outcome: RunOutcome = 'alive';
   /**
@@ -166,7 +173,11 @@ export class Run implements PerkHost {
       this.difficulty,
       {
         onWaveStart: () => {},
-        onWaveClear: () => this.perks.waveClear(this.world),
+        onWaveClear: (wave) => {
+          this.perks.waveClear(this.world);
+          // Each boss pays a rare perk. The last one ends the run instead.
+          if (wave % BOSS_INTERVAL === 0 && wave < FINAL_WAVE) this.queueBossReward();
+        },
         onRunWon: () => {
           this.outcome = 'won';
         },
@@ -290,8 +301,28 @@ export class Run implements PerkHost {
         this.classLevelsSeen.add(this.level);
         if (this.player.def.upgradesTo.length > 0) this.pendingChoices.push('class');
       }
-      if (CARD_LEVELS.has(this.level)) this.pendingChoices.push('card');
+      if (CARD_LEVELS.has(this.level)) {
+        // A boss reward already stood in for this card.
+        if (this.cardsOwed > 0) this.cardsOwed--;
+        else this.pendingChoices.push('card');
+      }
     }
+  }
+
+  /**
+   * Queues a boss's rare hand in place of a level-up card, rather than on top.
+   *
+   * On top, a full run gained four extra perks and got easier, which is the
+   * opposite of what moving rares to the bosses was for. So the reward takes
+   * the level-up card already waiting if there is one (a level earned on the
+   * killing blow), and otherwise the next one earned. Refunded cards from a
+   * class that drops stats are not level-up cards and are never taken.
+   */
+  private queueBossReward(): void {
+    const waiting = this.pendingChoices.indexOf('card');
+    if (waiting >= 0) this.pendingChoices.splice(waiting, 1);
+    else this.cardsOwed++;
+    this.pendingChoices.push('rare');
   }
 
   addScore(amount: number): void {
@@ -339,9 +370,17 @@ export class Run implements PerkHost {
 
   // --- Cards ----------------------------------------------------------------
 
-  /** Deals a fresh hand for the pending card choice. */
-  dealHand(): Card[] {
+  /**
+   * Deals a fresh hand for a pending card choice.
+   *
+   * With no kind given it deals for the first card choice in the queue, a boss
+   * reward or a level-up, whichever is waiting.
+   */
+  dealHand(kind?: HandKind): Card[] {
+    const next = this.pendingChoices.find((c) => c !== 'class');
+    this.handKind = kind ?? (next === 'rare' ? 'rare' : 'level');
     this.hand = dealCards({
+      kind: this.handKind,
       def: this.player.def,
       points: this.player.points,
       perks: this.perks,
@@ -356,7 +395,7 @@ export class Run implements PerkHost {
   reroll(): boolean {
     if (this.rerolls <= 0) return false;
     this.rerolls--;
-    this.dealHand();
+    this.dealHand(this.handKind);
     return true;
   }
 
@@ -378,7 +417,7 @@ export class Run implements PerkHost {
         break;
     }
     this.hand = [];
-    this.consumeChoice('card');
+    this.consumeChoice(this.handKind === 'rare' ? 'rare' : 'card');
   }
 
   private addPerk(def: PerkDefinition): void {

@@ -146,9 +146,10 @@ test('motes leave the simulation exactly as it would have been', () => {
       run.applyIntent(intent({ fire: true }), (i * 0.05) % (Math.PI * 2));
       run.tick();
       while (run.waitingOnChoice) {
-        const hand = run.dealHand();
-        if (run.pendingChoices[0] === 'card' && hand.length) run.takeCard(hand[0]!);
-        else run.consumeChoice(run.pendingChoices[0]!);
+        const next = run.pendingChoices[0]!;
+        const hand = next === 'class' ? [] : run.dealHand();
+        if (hand.length) run.takeCard(hand[0]!);
+        else run.consumeChoice(next);
       }
     }
     const p = run.player;
